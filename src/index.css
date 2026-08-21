@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-netflix-bg: #0b0b0b;
+  --color-netflix-card: #141414;
+  --color-netflix-hover: #2f2f2f;
+  --color-netflix-red: #E50914;
+  
+  --font-family-netflix: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --animate-fade-in: fade-in 0.8s ease-out;
+  --animate-progress: progress linear forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+body {
+  background-color: var(--color-netflix-bg);
+  color: white;
+  font-family: var(--font-family-netflix);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+

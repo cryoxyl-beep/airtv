@@ -1,0 +1,6 @@
+{
+  "name": "Prime Streamer",
+  "description": "A streaming platform UI powered by TMDB.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
