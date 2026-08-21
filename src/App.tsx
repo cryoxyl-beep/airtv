@@ -61,7 +61,12 @@ export default function App() {
         
         setHeroItems(detailedHeroItems);
         setTrending(trendingData.results || []);
-        setTop10(top10Data.results?.slice(0, 10) || []);
+        const filteredTop10 = (top10Data.results || []).filter((item: any) => {
+          const title = item.title || item.name || '';
+          return title !== 'Tagesschau' && title !== 'Paradise Hotel';
+        });
+        
+        setTop10(filteredTop10.slice(0, 10));
         
         setAction(actionData.results || []);
         setComedy(comedyData.results || []);

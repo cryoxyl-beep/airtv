@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus } from 'lucide-react';
+import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus, Info } from 'lucide-react';
 import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo } from '../api/tmdb';
 
 interface HeroProps {
@@ -11,6 +11,15 @@ export default function Hero({ items }: HeroProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!document.getElementById('youtube-iframe-api')) {
+      const tag = document.createElement('script');
+      tag.id = 'youtube-iframe-api';
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(tag);
+    }
+  }, []);
 
   useEffect(() => {
     if (!items || items.length === 0) return;
@@ -69,6 +78,33 @@ export default function Hero({ items }: HeroProps) {
     };
   }, [activeIndex, items]);
 
+  useEffect(() => {
+    if (!trailerKey) return;
+    let playerInitTimer: ReturnType<typeof setTimeout>;
+    
+    const initPlayer = () => {
+      const yt = (window as any).YT;
+      if (yt && yt.Player) {
+        new yt.Player('hero-trailer-player', {
+          events: {
+            onReady: (event: any) => {
+              event.target.unloadModule('captions');
+            },
+            onApiChange: (event: any) => {
+              event.target.unloadModule('captions');
+            }
+          }
+        });
+      } else {
+        playerInitTimer = setTimeout(initPlayer, 100);
+      }
+    };
+    
+    initPlayer();
+
+    return () => clearTimeout(playerInitTimer);
+  }, [trailerKey]);
+
   if (!items || items.length === 0) return <div className="h-[95vh] bg-[#0b0b0b] animate-pulse" />;
 
   const activeItem = items[activeIndex];
@@ -81,10 +117,11 @@ export default function Hero({ items }: HeroProps) {
       {/* Layer 0: YouTube Player */}
       <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-[#0b0b0b]">
         {trailerKey && (
-          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] pointer-events-none transition-opacity duration-700 ease-in-out will-change-opacity ${isTrailerVisible ? 'opacity-100' : 'opacity-0'}`}>
+          <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-[1.15] pointer-events-none transition-opacity duration-700 ease-in-out will-change-opacity ${isTrailerVisible ? 'opacity-100' : 'opacity-0'}`}>
             <iframe
+              id="hero-trailer-player"
               key={trailerKey}
-              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}`}
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
               className="w-full h-full pointer-events-none object-cover"
               allow="autoplay; encrypted-media"
               tabIndex={-1}
@@ -136,8 +173,8 @@ export default function Hero({ items }: HeroProps) {
             <button className="bg-white text-black px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition hover:bg-gray-200 shadow-lg">
               <Play className="w-4 h-4 fill-current text-black" /> Watch now
             </button>
-            <button className="bg-transparent border border-white/40 hover:border-white text-white px-8 py-2.5 rounded-full font-medium transition backdrop-blur-sm">
-              Trailer
+            <button className="bg-transparent border border-white/40 hover:border-white text-white px-8 py-2.5 rounded-full font-medium flex items-center gap-2 transition backdrop-blur-sm">
+              <Info className="w-5 h-5" /> Info
             </button>
           </div>
 
