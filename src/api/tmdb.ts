@@ -293,3 +293,14 @@ export const fetchTVByGenre = async (genreId: number) => {
   }
 };
 
+
+export const fetchTVSeason = async (tvId: number, seasonNumber: number) => {
+  try {
+    const res = await fetch(`${BASE_URL}/tv/${tvId}/season/${seasonNumber}?language=en-US`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn(`fetchTVSeason failed for tv ${tvId} season ${seasonNumber}:`, error);
+    throw error;
+  }
+};

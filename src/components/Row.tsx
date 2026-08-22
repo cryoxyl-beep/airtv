@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo } from '../api/tmdb';
 
 interface RowProps {
@@ -15,6 +16,7 @@ const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ ite
   const cardRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -71,6 +73,14 @@ const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ ite
       }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onClick={() => {
+        const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+        if (type === 'tv') {
+          navigate(`/watch/tv/${item.id}/season/1/episode/1`);
+        } else {
+          navigate(`/watch/movie/${item.id}`);
+        }
+      }}
     >
       {isTop10 && (
         <div className="flex-shrink-0 flex items-center justify-center z-10">

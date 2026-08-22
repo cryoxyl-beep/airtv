@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo, getCachedLogo } from '../api/tmdb';
 
 interface HeroProps {
@@ -11,6 +12,7 @@ export default function Hero({ items }: HeroProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (items && items[activeIndex]) {
@@ -181,7 +183,17 @@ export default function Hero({ items }: HeroProps) {
 
           {/* Buttons */}
           <div className="flex items-center gap-4 mt-2">
-            <button className="bg-white text-black px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition hover:bg-gray-200 shadow-lg">
+            <button 
+              onClick={() => {
+                const type = activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie');
+                if (type === 'tv') {
+                  navigate(`/watch/tv/${activeItem.id}/season/1/episode/1`);
+                } else {
+                  navigate(`/watch/movie/${activeItem.id}`);
+                }
+              }}
+              className="bg-white text-black px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition hover:bg-gray-200 shadow-lg"
+            >
               <Play className="w-4 h-4 fill-current text-black" /> Watch now
             </button>
             <button className="bg-transparent border border-white/40 hover:border-white text-white px-8 py-2.5 rounded-full font-medium flex items-center gap-2 transition backdrop-blur-sm">
