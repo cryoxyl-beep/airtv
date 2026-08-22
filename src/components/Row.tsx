@@ -139,29 +139,18 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
 
   // Restore horizontal scroll
   useEffect(() => {
-    if (navigationType === 'POP' && rowRef.current) {
+    if (navigationType === 'POP' && rowRef.current && items.length > 0) {
       const savedX = sessionStorage.getItem(`scroll-x-${location.key}-${title}`);
       if (savedX) {
         const x = parseInt(savedX, 10);
-        let attempts = 0;
-        const interval = setInterval(() => {
-          if (rowRef.current && items.length > 0) {
-            if (rowRef.current.scrollLeft !== x && rowRef.current.scrollWidth >= x) {
-               rowRef.current.scrollLeft = x;
-            }
-            attempts++;
-            if (attempts > 20 || rowRef.current.scrollLeft === x) {
-               clearInterval(interval);
-            }
-          } else {
-             attempts++;
-             if (attempts > 20) clearInterval(interval);
+        requestAnimationFrame(() => {
+          if (rowRef.current) {
+            rowRef.current.scrollLeft = x;
           }
-        }, 100);
-        return () => clearInterval(interval);
+        });
       }
     }
-  }, [location, navigationType, title, items]);
+  }, [location.key, navigationType, title, items.length]);
 
   // Save horizontal scroll
   useEffect(() => {

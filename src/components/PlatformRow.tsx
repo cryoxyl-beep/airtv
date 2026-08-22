@@ -27,22 +27,14 @@ export default function PlatformRow() {
       const savedX = sessionStorage.getItem(`scroll-x-${location.key}-platforms`);
       if (savedX) {
         const x = parseInt(savedX, 10);
-        let attempts = 0;
-        const interval = setInterval(() => {
+        requestAnimationFrame(() => {
           if (rowRef.current) {
-            if (rowRef.current.scrollLeft !== x && rowRef.current.scrollWidth >= x) {
-               rowRef.current.scrollLeft = x;
-            }
-            attempts++;
-            if (attempts > 20 || rowRef.current.scrollLeft === x) {
-               clearInterval(interval);
-            }
+            rowRef.current.scrollLeft = x;
           }
-        }, 100);
-        return () => clearInterval(interval);
+        });
       }
     }
-  }, [location, navigationType]);
+  }, [location.key, navigationType]);
 
   // Save horizontal scroll
   useEffect(() => {
