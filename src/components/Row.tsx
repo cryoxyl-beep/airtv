@@ -9,7 +9,7 @@ interface RowProps {
   isTop10?: boolean;
 }
 
-const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ item, isTop10, index }) => {
+export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> = ({ item, isTop10 = false, index }) => {
   const initialLogo = getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
   const [loadingLogo, setLoadingLogo] = useState(!initialLogo);

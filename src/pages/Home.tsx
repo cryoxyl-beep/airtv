@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Hero from '../components/Hero';
 import Row from '../components/Row';
+import PlatformRow from '../components/PlatformRow';
 import { fetchTrending, fetchTop10, fetchAnime, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre } from '../api/tmdb';
 
 export default function Home() {
@@ -61,6 +62,7 @@ export default function Home() {
         
         setHeroItems(detailedHeroItems);
         setTrending(trendingData.results || []);
+
         const filteredTop10 = (top10Data.results || []).filter((item: any) => {
           const title = item.title || item.name || '';
           return title !== 'Tagesschau' && title !== 'Paradise Hotel';
@@ -77,6 +79,7 @@ export default function Home() {
         setFamily(familyData.results || []);
         setCrime(crimeData.results || []);
         setDrama(dramaData.results || []);
+
       } catch (err) {
         console.error("Failed to load TMDB data", err);
       }
@@ -88,7 +91,6 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#0b0b0b] pb-20 font-sans overflow-x-hidden w-[100vw]">
       <Hero items={heroItems} />
-
       <div className="relative z-20 flex flex-col gap-10 pt-4">
         
         <Row 
@@ -101,6 +103,8 @@ export default function Home() {
           title="Suggested For You" 
           items={trending.slice(4)} 
         />
+
+        <PlatformRow />
         
         <Row title="Action & Adventure" items={action} />
         <Row title="Comedies" items={comedy} />
@@ -111,7 +115,6 @@ export default function Home() {
         <Row title="Family Movies" items={family} />
         <Row title="Crime" items={crime} />
         <Row title="Drama" items={drama} />
-
       </div>
     </div>
   );

@@ -314,3 +314,40 @@ export const fetchTVSeason = async (tvId: number, seasonNumber: number, retries 
     throw error;
   }
 };
+
+let cachedProviders: any[] = [];
+export const fetchProviderLogos = async () => {
+  if (cachedProviders.length > 0) return cachedProviders;
+  try {
+    const res = await fetch(`${BASE_URL}/watch/providers/movie?language=en-US`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    const data = await res.json();
+    cachedProviders = data.results || [];
+    return cachedProviders;
+  } catch (error) {
+    console.warn("fetchProviderLogos failed:", error);
+    return [];
+  }
+};
+
+export const fetchByProvider = async (providerId: number) => {
+  try {
+    const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn(`fetchByProvider failed for provider ${providerId}:`, error);
+    return { results: [] };
+  }
+};
+
+export const fetchTVByProvider = async (providerId: number) => {
+  try {
+    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn(`fetchTVByProvider failed for provider ${providerId}:`, error);
+    return { results: [] };
+  }
+};
