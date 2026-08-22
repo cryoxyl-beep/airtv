@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { IMAGE_BASE_URL_W500, resolveLogo } from '../api/tmdb';
+import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo } from '../api/tmdb';
 
 interface RowProps {
   title: string;
@@ -9,8 +9,9 @@ interface RowProps {
 }
 
 const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ item, isTop10, index }) => {
-  const [logo, setLogo] = useState<string | null>(null);
-  const [loadingLogo, setLoadingLogo] = useState(true);
+  const initialLogo = getCachedLogo(item);
+  const [logo, setLogo] = useState<string | null>(initialLogo);
+  const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -37,6 +38,9 @@ const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ ite
 
   useEffect(() => {
     if (!isVisible) return;
+    
+    // If we already synchronously loaded the logo, we don't need to fetch it again
+    if (logo) return;
 
     let mounted = true;
     const getLogo = async () => {
@@ -57,7 +61,7 @@ const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ ite
     return () => {
       mounted = false;
     };
-  }, [item, isVisible]);
+  }, [item, isVisible, logo]);
 
   return (
     <div

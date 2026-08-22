@@ -99,100 +99,176 @@ export const fetchTrailer = async (id: number, type: 'movie' | 'tv' = 'tv'): Pro
   }
 };
 
-const logoCache = new Map<string, string | null>();
+const LOGO_CACHE_VERSION = 'v1';
+const inFlightLogos = new Map<string, Promise<string | null>>();
 
-export const resolveLogo = async (item: any): Promise<string | null> => {
+interface CachedLogo {
+  url: string | null;
+  source: string;
+  version: string;
+  timestamp: number;
+}
+
+export const getCachedLogo = (item: any): string | null => {
   if (!item) return null;
-  
   const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
-  const cacheKey = `${type}_${item.id}`;
+  const cacheKey = `hd_logo_${type}_${item.id}`;
   
-  if (logoCache.has(cacheKey)) {
-    return logoCache.get(cacheKey)!;
-  }
-  
-  // 1. TMDB Logo Check
-  let tmdbLogo: string | null = null;
-  
-  // First check if logos are already present in item metadata (e.g. Hero section item)
-  const logos = item.images?.logos || [];
-  if (logos.length > 0) {
-    logos.sort((a: any, b: any) => b.vote_average - a.vote_average);
-    const enLogo = logos.find((l: any) => l.iso_639_1 === 'en');
-    tmdbLogo = enLogo?.file_path || logos[0]?.file_path;
-  }
-  
-  // If not in item, fetch it from TMDB images endpoint
-  if (!tmdbLogo) {
+  if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      const res = await fetch(`${BASE_URL}/${type}/${item.id}/images?include_image_language=en,null`, fetchOptions);
-      if (res.ok) {
-        const data = await res.json();
-        const fetchedLogos = data.logos || [];
-        if (fetchedLogos.length > 0) {
-          fetchedLogos.sort((a: any, b: any) => b.vote_average - a.vote_average);
-          const enLogo = fetchedLogos.find((l: any) => l.iso_639_1 === 'en');
-          tmdbLogo = enLogo?.file_path || fetchedLogos[0]?.file_path;
-        }
-      }
-    } catch (error) {
-      // ignore
-    }
-  }
-  
-  if (tmdbLogo) {
-    const fullUrl = `${IMAGE_BASE_URL}${tmdbLogo}`; // We'll return full URLs for both TMDB and Fanart
-    logoCache.set(cacheKey, fullUrl);
-    return fullUrl;
-  }
-  
-  // 2. Fanart.tv Fallback
-  const FANART_API_KEY = (import.meta as any).env.VITE_FANART_API_KEY || '[PASTE_FANART_API_KEY_HERE]';
-  let fanartLogoUrl: string | null = null;
-  
-  if (type === 'movie') {
-    try {
-      const res = await fetch(`https://webservice.fanart.tv/v3.2/movies/${item.id}?api_key=${FANART_API_KEY}`);
-      if (res.ok) {
-        const data = await res.json();
-        const hdlogos = data.hdmovielogo || [];
-        if (hdlogos.length > 0) {
-          // Prioritize english, then fallback
-          const enLogo = hdlogos.find((l: any) => l.lang === 'en');
-          fanartLogoUrl = enLogo?.url || hdlogos[0]?.url;
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const parsed: CachedLogo = JSON.parse(cachedData);
+        if (parsed && parsed.version === LOGO_CACHE_VERSION) {
+          return parsed.url;
         }
       }
     } catch (e) {
       // ignore
     }
-  } else if (type === 'tv') {
-    // Check if existing metadata has a tvdb_id
-    const tvdbId = item.external_ids?.tvdb_id || item.tvdb_id;
-    if (tvdbId) {
+  }
+  return null;
+};
+
+export const resolveLogo = async (item: any): Promise<string | null> => {
+  if (!item) return null;
+  
+  const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+  const cacheKey = `hd_logo_${type}_${item.id}`;
+  const isDev = (import.meta as any).env?.DEV === true;
+  
+  // 1. Check LocalStorage
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const cachedData = localStorage.getItem(cacheKey);
+      if (cachedData) {
+        const parsed: CachedLogo = JSON.parse(cachedData);
+        if (parsed && parsed.version === LOGO_CACHE_VERSION) {
+          if (isDev) console.log(`Logo cache hit: ${cacheKey}`);
+          return parsed.url;
+        } else {
+          // Version mismatch or invalid cache, clear it
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    } catch (e) {
+      if (isDev) console.warn(`Failed to read from localStorage for ${cacheKey}`, e);
+    }
+  }
+  
+  // 2. Check if already in flight
+  if (inFlightLogos.has(cacheKey)) {
+    if (isDev) console.log(`Logo request already in flight: ${cacheKey}`);
+    return inFlightLogos.get(cacheKey)!;
+  }
+  
+  if (isDev) console.log(`Logo cache miss: ${cacheKey}`);
+  
+  // 3. Create fetch promise and store it
+  const fetchPromise = (async () => {
+    let finalUrl: string | null = null;
+    let source = 'none';
+    
+    // TMDB Logo Check
+    let tmdbLogo: string | null = null;
+    const logos = item.images?.logos || [];
+    if (logos.length > 0) {
+      logos.sort((a: any, b: any) => b.vote_average - a.vote_average);
+      const enLogo = logos.find((l: any) => l.iso_639_1 === 'en');
+      tmdbLogo = enLogo?.file_path || logos[0]?.file_path;
+    }
+    
+    if (!tmdbLogo) {
       try {
-        const res = await fetch(`https://webservice.fanart.tv/v3.2/tv/${tvdbId}?api_key=${FANART_API_KEY}`);
+        const res = await fetch(`${BASE_URL}/${type}/${item.id}/images?include_image_language=en,null`, fetchOptions);
         if (res.ok) {
           const data = await res.json();
-          const hdtvlogos = data.hdtvlogo || [];
-          if (hdtvlogos.length > 0) {
-            const enLogo = hdtvlogos.find((l: any) => l.lang === 'en');
-            fanartLogoUrl = enLogo?.url || hdtvlogos[0]?.url;
+          const fetchedLogos = data.logos || [];
+          if (fetchedLogos.length > 0) {
+            fetchedLogos.sort((a: any, b: any) => b.vote_average - a.vote_average);
+            const enLogo = fetchedLogos.find((l: any) => l.iso_639_1 === 'en');
+            tmdbLogo = enLogo?.file_path || fetchedLogos[0]?.file_path;
           }
         }
+      } catch (error) {
+        // ignore
+      }
+    }
+    
+    if (tmdbLogo) {
+      finalUrl = `${IMAGE_BASE_URL}${tmdbLogo}`;
+      source = 'TMDB';
+      if (isDev) console.log(`Logo fetched from TMDB: ${cacheKey}`);
+    }
+    
+    // Fanart.tv Fallback
+    if (!finalUrl) {
+      const FANART_API_KEY = (import.meta as any).env.VITE_FANART_API_KEY || '[PASTE_FANART_API_KEY_HERE]';
+      if (type === 'movie') {
+        try {
+          const res = await fetch(`https://webservice.fanart.tv/v3.2/movies/${item.id}?api_key=${FANART_API_KEY}`);
+          if (res.ok) {
+            const data = await res.json();
+            const hdlogos = data.hdmovielogo || [];
+            if (hdlogos.length > 0) {
+              const enLogo = hdlogos.find((l: any) => l.lang === 'en');
+              finalUrl = enLogo?.url || hdlogos[0]?.url;
+              if (finalUrl) source = 'Fanart.tv';
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      } else if (type === 'tv') {
+        const tvdbId = item.external_ids?.tvdb_id || item.tvdb_id;
+        if (tvdbId) {
+          try {
+            const res = await fetch(`https://webservice.fanart.tv/v3.2/tv/${tvdbId}?api_key=${FANART_API_KEY}`);
+            if (res.ok) {
+              const data = await res.json();
+              const hdtvlogos = data.hdtvlogo || [];
+              if (hdtvlogos.length > 0) {
+                const enLogo = hdtvlogos.find((l: any) => l.lang === 'en');
+                finalUrl = enLogo?.url || hdtvlogos[0]?.url;
+                if (finalUrl) source = 'Fanart.tv';
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+      
+      if (finalUrl && source === 'Fanart.tv' && isDev) {
+        console.log(`Logo fetched from Fanart.tv: ${cacheKey}`);
+      }
+    }
+    
+    // Cache the result
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const cacheData: CachedLogo = {
+          url: finalUrl,
+          source,
+          version: LOGO_CACHE_VERSION,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+        if (isDev) console.log(`Logo saved to cache: ${cacheKey}`);
       } catch (e) {
         // ignore
       }
     }
-  }
+    
+    return finalUrl;
+  })();
   
-  if (fanartLogoUrl) {
-    logoCache.set(cacheKey, fanartLogoUrl);
-    return fanartLogoUrl;
+  inFlightLogos.set(cacheKey, fetchPromise);
+  try {
+    return await fetchPromise;
+  } finally {
+    inFlightLogos.delete(cacheKey);
   }
-  
-  // 3. Fallback: No logo
-  logoCache.set(cacheKey, null);
-  return null;
 };
 
 export const fetchByGenre = async (genreId: number) => {

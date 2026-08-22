@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus, Info } from 'lucide-react';
-import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo } from '../api/tmdb';
+import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo, getCachedLogo } from '../api/tmdb';
 
 interface HeroProps {
   items: any[];
@@ -11,6 +11,12 @@ export default function Hero({ items }: HeroProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items && items[activeIndex]) {
+      setLogoUrl(getCachedLogo(items[activeIndex]));
+    }
+  }, [items, activeIndex]);
 
   useEffect(() => {
     if (!document.getElementById('youtube-iframe-api')) {
@@ -35,9 +41,14 @@ export default function Hero({ items }: HeroProps) {
     // Clean up previous trailer and logo state
     setTrailerKey(null);
     setCanShowTrailer(false);
-    setLogoUrl(null);
 
     const activeItem = items[activeIndex];
+    
+    const cachedLogo = getCachedLogo(activeItem);
+    if (!cachedLogo) {
+      setLogoUrl(null);
+    }
+    
     if (!activeItem) return;
 
     fetchTrailer(activeItem.id, activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie'))
