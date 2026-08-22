@@ -17,33 +17,24 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
           <div 
             key={episode.id}
             onClick={() => onEpisodeSelect(episode.episode_number)}
-            className="flex flex-col gap-3 group cursor-pointer"
+            className="flex flex-col gap-3 group cursor-pointer relative z-10 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110"
           >
             {/* Image Container */}
-            <div className={`relative aspect-video rounded-md overflow-hidden bg-[#141414] transition-all duration-300
-              ${isActive ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'group-hover:ring-1 group-hover:ring-white/50 group-hover:ring-offset-1 group-hover:ring-offset-[#0b0b0b]'}
+            <div className={`relative aspect-video rounded-md overflow-hidden bg-[#141414] border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] z-20
+              ${isActive ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : ''}
             `}>
               {episode.still_path ? (
                 <img 
                   src={`${IMAGE_BASE_URL_W500}${episode.still_path}`}
                   alt={episode.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
                   loading="lazy"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/20">
+                <div className="w-full h-full flex items-center justify-center text-white/20 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:brightness-110">
                   No Image
                 </div>
               )}
-              
-              {/* Play icon overlay on hover */}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full border-2 border-white flex items-center justify-center pl-1 backdrop-blur-sm">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M5 3L19 12L5 21V3Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              </div>
             </div>
 
             {/* Content Info */}

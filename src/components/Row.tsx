@@ -76,7 +76,7 @@ const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ ite
       onClick={() => {
         const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
         if (type === 'tv') {
-          navigate(`/watch/tv/${item.id}/season/1/episode/1`);
+          navigate(`/watch/tv/${item.id}`);
         } else {
           navigate(`/watch/movie/${item.id}`);
         }

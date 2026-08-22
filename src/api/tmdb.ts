@@ -57,12 +57,17 @@ export const fetchAllTimeFavorites = async () => {
   }
 };
 
-export const fetchDetails = async (id: number, type: 'movie' | 'tv' = 'tv') => {
+export const fetchDetails = async (id: number, type: 'movie' | 'tv' = 'tv', retries = 2) => {
   try {
     const res = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=images,credits,content_ratings,release_dates&include_image_language=en,null`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
     return await res.json();
   } catch (error) {
+    if (retries > 0) {
+      console.warn(`fetchDetails failed, retrying... (${retries} left)`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return fetchDetails(id, type, retries - 1);
+    }
     console.warn("fetchDetails failed:", error);
     throw error;
   }
@@ -294,12 +299,17 @@ export const fetchTVByGenre = async (genreId: number) => {
 };
 
 
-export const fetchTVSeason = async (tvId: number, seasonNumber: number) => {
+export const fetchTVSeason = async (tvId: number, seasonNumber: number, retries = 2) => {
   try {
     const res = await fetch(`${BASE_URL}/tv/${tvId}/season/${seasonNumber}?language=en-US`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
     return await res.json();
   } catch (error) {
+    if (retries > 0) {
+      console.warn(`fetchTVSeason failed for tv ${tvId} season ${seasonNumber}, retrying...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return fetchTVSeason(tvId, seasonNumber, retries - 1);
+    }
     console.warn(`fetchTVSeason failed for tv ${tvId} season ${seasonNumber}:`, error);
     throw error;
   }

@@ -26,14 +26,6 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
   // Determine the best backdrop to show while loading
   let backdropPath = item?.backdrop_path;
-  
-  // If TV, try to show the episode still as the backdrop
-  if (type === 'tv' && seasonData && episodeNumber) {
-    const episode = seasonData.episodes?.find((e: any) => e.episode_number === episodeNumber);
-    if (episode?.still_path) {
-      backdropPath = episode.still_path;
-    }
-  }
 
   const overviewText = item.overview;
 

@@ -13,7 +13,7 @@ interface WatchPageProps {
 }
 
 export default function WatchPage({ type }: WatchPageProps) {
-  const { id, season: seasonParam, episode: episodeParam } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
   
   const [data, setData] = useState<any>(null);
@@ -21,8 +21,8 @@ export default function WatchPage({ type }: WatchPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  const seasonNumber = parseInt(seasonParam || '1', 10);
-  const episodeNumber = parseInt(episodeParam || '1', 10);
+  const [seasonNumber, setSeasonNumber] = useState(1);
+  const [episodeNumber, setEpisodeNumber] = useState(1);
 
   useEffect(() => {
     const loadContent = async () => {
@@ -33,18 +33,40 @@ export default function WatchPage({ type }: WatchPageProps) {
         if (!id) throw new Error('No ID');
         
         // 1. Fetch main details (movie or tv show)
-        const details = await fetchDetails(parseInt(id), type);
+        let details;
+        try {
+          details = await fetchDetails(parseInt(id), type);
+        } catch (e: any) {
+          console.error("fetchDetails failed:", e);
+          throw new Error(`Details fetch failed: ${e.message}`);
+        }
+        
         setData(details);
 
         // 2. If TV show, fetch specific season details
-        if (type === 'tv') {
-          // If no season param, we might redirect to season 1 episode 1 (handled in router usually)
-          // But here we definitely have it if it matched the route
-          const season = await fetchTVSeason(parseInt(id), seasonNumber);
-          setSeasonData(season);
+        if (type === 'tv' && details) {
+          // Check if requested season exists
+          const seasons = details.seasons || [];
+          let targetSeason = seasonNumber;
+          const seasonExists = seasons.find((s: any) => s.season_number === targetSeason);
+          
+          if (!seasonExists && seasons.length > 0) {
+            // Default to the first valid season (prefer > 0)
+            const validSeason = seasons.find((s: any) => s.season_number > 0) || seasons[0];
+            targetSeason = validSeason.season_number;
+            setSeasonNumber(targetSeason);
+            setEpisodeNumber(1);
+          }
+
+          try {
+            const season = await fetchTVSeason(parseInt(id), targetSeason);
+            setSeasonData(season);
+          } catch (e: any) {
+            console.error("fetchTVSeason failed:", e);
+          }
         }
-      } catch (err) {
-        console.error("Failed to load watch data:", err);
+      } catch (err: any) {
+        console.error("Failed to load watch data:", err.message || err);
         setError(true);
       } finally {
         setLoading(false);
@@ -52,7 +74,22 @@ export default function WatchPage({ type }: WatchPageProps) {
     };
 
     loadContent();
-  }, [id, type, seasonNumber]);
+  }, [id, type]);
+
+  // Load season data when seasonNumber state changes, but don't reload everything
+  useEffect(() => {
+    if (type === 'tv' && id && !loading && data) {
+      const loadSeason = async () => {
+        try {
+          const season = await fetchTVSeason(parseInt(id), seasonNumber);
+          setSeasonData(season);
+        } catch (e: any) {
+          console.error("fetchTVSeason failed:", e);
+        }
+      };
+      loadSeason();
+    }
+  }, [seasonNumber, id, type]);
 
   if (loading) {
     return (
@@ -104,12 +141,12 @@ export default function WatchPage({ type }: WatchPageProps) {
   };
 
   const handleSeasonChange = (newSeason: number) => {
-    // Navigate to episode 1 of the new season
-    navigate(`/watch/tv/${id}/season/${newSeason}/episode/1`);
+    setSeasonNumber(newSeason);
+    setEpisodeNumber(1);
   };
 
   const handleEpisodeChange = (newEpisode: number) => {
-    navigate(`/watch/tv/${id}/season/${seasonNumber}/episode/${newEpisode}`);
+    setEpisodeNumber(newEpisode);
   };
 
   return (

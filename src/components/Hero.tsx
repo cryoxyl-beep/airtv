@@ -189,7 +189,7 @@ export default function Hero({ items }: HeroProps) {
               onClick={() => {
                 const type = activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie');
                 if (type === 'tv') {
-                  navigate(`/watch/tv/${activeItem.id}/season/1/episode/1`);
+                  navigate(`/watch/tv/${activeItem.id}`);
                 } else {
                   navigate(`/watch/movie/${activeItem.id}`);
                 }
