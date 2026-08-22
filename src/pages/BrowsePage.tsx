@@ -4,14 +4,16 @@ import { fetchByProvider, fetchTVByProvider, IMAGE_BASE_URL_W500 } from '../api/
 import { RowCard } from '../components/Row';
 import { ArrowLeft } from 'lucide-react';
 
+import { logos } from '../assets/logos';
+
 const platforms = {
-  'netflix': { id: 8, name: 'Netflix', logo: '/netflix.png' },
-  'prime-video': { id: 9, name: 'Prime Video', logo: '/prime.png' },
-  'disney-plus': { id: 337, name: 'Disney+', logo: '/disney.png' },
-  'apple-tv-plus': { id: 350, name: 'Apple TV+', logo: '/apple.png' },
-  'hulu': { id: 15, name: 'Hulu', logo: '/hulu.png' },
-  'hbo-max': { id: 1899, name: 'HBO Max', logo: '/hbo.png' },
-  'paramount': { id: 531, name: 'Paramount+', logo: '/paramount.png' },
+  'netflix': { id: 8, name: 'Netflix', logo: logos.netflix },
+  'prime-video': { id: 9, name: 'Prime Video', logo: logos.prime },
+  'disney-plus': { id: 337, name: 'Disney+', logo: logos.disney },
+  'apple-tv-plus': { id: 350, name: 'Apple TV+', logo: logos.apple },
+  'hulu': { id: 15, name: 'Hulu', logo: logos.hulu },
+  'hbo-max': { id: 1899, name: 'HBO Max', logo: logos.hbo },
+  'paramount': { id: 531, name: 'Paramount+', logo: logos.paramount },
 };
 
 export default function BrowsePage() {

@@ -1,14 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 
+import { logos } from '../assets/logos';
+
 const platforms = [
-  { id: 8, slug: 'netflix', name: 'Netflix', logo: '/netflix.png' },
-  { id: 9, slug: 'prime-video', name: 'Prime Video', logo: '/prime.png' },
-  { id: 337, slug: 'disney-plus', name: 'Disney+', logo: '/disney.png' },
-  { id: 350, slug: 'apple-tv-plus', name: 'Apple TV+', logo: '/apple.png' },
-  { id: 15, slug: 'hulu', name: 'Hulu', logo: '/hulu.png' },
-  { id: 1899, slug: 'hbo-max', name: 'HBO Max', logo: '/hbo.png' },
-  { id: 531, slug: 'paramount', name: 'Paramount+', logo: '/paramount.png' },
+  { id: 8, slug: 'netflix', name: 'Netflix', logo: logos.netflix },
+  { id: 9, slug: 'prime-video', name: 'Prime Video', logo: logos.prime },
+  { id: 337, slug: 'disney-plus', name: 'Disney+', logo: logos.disney },
+  { id: 350, slug: 'apple-tv-plus', name: 'Apple TV+', logo: logos.apple },
+  { id: 15, slug: 'hulu', name: 'Hulu', logo: logos.hulu },
+  { id: 1899, slug: 'hbo-max', name: 'HBO Max', logo: logos.hbo },
+  { id: 531, slug: 'paramount', name: 'Paramount+', logo: logos.paramount },
 ];
 
 export default function PlatformRow() {
