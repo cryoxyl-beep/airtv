@@ -75,13 +75,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   }
 
   const handleBack = () => {
-    // If they navigated directly here, navigate(-1) might exit app.
-    // We can just go back, or fallback to home.
-    if (window.history.length > 2) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
+    navigate('/');
   };
 
   const handleSeasonChange = (newSeason: number) => {
@@ -120,42 +114,6 @@ export default function WatchPage({ type }: WatchPageProps) {
       {/* Details & Episode Selection Area */}
       <div className="max-w-[1600px] mx-auto px-6 md:px-12 py-10 mt-4 md:mt-8">
         
-        {/* Title & Metadata (Movie Focus, or brief TV info) */}
-        <div className="flex flex-col gap-4 max-w-4xl mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-            {data.title || data.name}
-          </h1>
-          
-          <div className="flex items-center gap-4 text-sm md:text-base text-white/60 font-medium">
-            {type === 'movie' && (
-              <>
-                <span>{new Date(data.release_date).getFullYear()}</span>
-                {data.runtime && <span>{Math.floor(data.runtime / 60)}h {data.runtime % 60}m</span>}
-              </>
-            )}
-            {type === 'tv' && (
-              <>
-                <span>{new Date(data.first_air_date).getFullYear()}</span>
-                <span>{data.number_of_seasons} Season{data.number_of_seasons > 1 ? 's' : ''}</span>
-              </>
-            )}
-            <div className="flex items-center gap-2">
-              {data.genres?.slice(0, 3).map((g: any, i: number) => (
-                <span key={g.id}>
-                  {g.name}
-                  {i < Math.min(data.genres.length, 3) - 1 ? ' • ' : ''}
-                </span>
-              ))}
-            </div>
-          </div>
-          
-          <p className="text-lg text-white/80 leading-relaxed max-w-3xl">
-            {type === 'tv' && seasonData?.episodes?.find((e: any) => e.episode_number === episodeNumber)?.overview 
-              ? seasonData.episodes.find((e: any) => e.episode_number === episodeNumber).overview 
-              : data.overview}
-          </p>
-        </div>
-
         {/* TV specific sections */}
         {type === 'tv' && data.seasons && seasonData && (
           <div className="mt-10">
@@ -167,23 +125,10 @@ export default function WatchPage({ type }: WatchPageProps) {
                 onSeasonChange={handleSeasonChange}
               />
             </div>
-            
-            {/* Tabs Mock */}
-            <div className="flex gap-8 border-b border-white/10 mb-8 pb-4 text-lg font-medium">
-              <button className="text-white relative after:absolute after:-bottom-[17px] after:left-0 after:w-full after:h-1 after:bg-white">
-                Episodes
-              </button>
-              <button className="text-white/40 hover:text-white transition-colors">
-                Related
-              </button>
-              <button className="text-white/40 hover:text-white transition-colors">
-                Details
-              </button>
-            </div>
 
             {/* Episode Count */}
-            <div className="text-white/60 mb-6">
-              {seasonData.episodes?.length || 0} episodes
+            <div className="text-white/60 mb-6 font-medium text-lg">
+              {seasonData.episodes?.length || 0} Episodes
             </div>
 
             {/* Episode Grid */}

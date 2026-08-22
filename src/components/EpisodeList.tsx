@@ -44,12 +44,6 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
                   </svg>
                 </div>
               </div>
-
-              {isActive && (
-                <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-md px-2 py-1 rounded text-xs font-bold text-white border border-white/20">
-                  Playing
-                </div>
-              )}
             </div>
 
             {/* Content Info */}
@@ -69,10 +63,6 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
                 
                 {episode.runtime && (
                   <span className="flex items-center gap-1">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
-                      <polyline points="17 2 12 7 7 2"></polyline>
-                    </svg>
                     {episode.runtime}min
                   </span>
                 )}

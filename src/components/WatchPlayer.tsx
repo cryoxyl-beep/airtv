@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { fetchTrailer, IMAGE_BASE_URL, IMAGE_BASE_URL_W500 } from '../api/tmdb';
-import { Volume2, VolumeX } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { IMAGE_BASE_URL, resolveLogo, getCachedLogo } from '../api/tmdb';
+import { Play } from 'lucide-react';
 
 interface WatchPlayerProps {
   item: any;
@@ -11,12 +11,17 @@ interface WatchPlayerProps {
 }
 
 export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, seasonData }: WatchPlayerProps) {
-  const [trailerKey, setTrailerKey] = useState<string | null>(null);
-  const [isVideoReady, setIsVideoReady] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
+
+  useEffect(() => {
+    let mounted = true;
+    resolveLogo(item).then(url => {
+      if (mounted && url) {
+        setLogoUrl(url);
+      }
+    });
+    return () => { mounted = false; };
+  }, [item]);
 
   // Determine the best backdrop to show while loading
   let backdropPath = item?.backdrop_path;
@@ -29,124 +34,80 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
     }
   }
 
-  useEffect(() => {
-    let isMounted = true;
-    setIsVideoReady(false);
-    setShowVideo(false);
-    setTrailerKey(null);
-    
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-
-    const loadVideo = async () => {
-      // Use existing fetchTrailer mechanism (fetches main trailer)
-      // Since TMDB trailer discovery for specific episodes is spotty, 
-      // we fallback to the main show trailer for the cinematic effect.
-      const key = await fetchTrailer(item.id, type);
-      
-      if (isMounted && key) {
-        setTrailerKey(key);
-      }
-    };
-
-    loadVideo();
-
-    return () => {
-      isMounted = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [item.id, type, episodeNumber, seasonNumber]);
-
-  useEffect(() => {
-    // When a new video starts loading (iframe unmounts/remounts), handle the transition
-    if (trailerKey) {
-      setIsVideoReady(false);
-      setShowVideo(false);
-    }
-  }, [trailerKey]);
-
-  // Handle iframe load
-  const handleIframeLoad = () => {
-    // Iframe has loaded the document, but YouTube player might not be fully "playing" yet.
-    // Give it a brief moment to buffer behind the image.
-    setIsVideoReady(true);
-    
-    timerRef.current = setTimeout(() => {
-      setShowVideo(true);
-    }, 1500); // 1.5s delay before crossfading to hide YouTube buffering UI
-  };
-
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (iframeRef.current && iframeRef.current.contentWindow) {
-      // Send postMessage to YouTube iframe API
-      iframeRef.current.contentWindow.postMessage(
-        JSON.stringify({
-          event: 'command',
-          func: isMuted ? 'unMute' : 'mute',
-          args: []
-        }),
-        '*'
-      );
-    }
-  };
+  const overviewText = type === 'tv' && seasonData?.episodes?.find((e: any) => e.episode_number === episodeNumber)?.overview 
+    ? seasonData.episodes.find((e: any) => e.episode_number === episodeNumber).overview 
+    : item.overview;
 
   return (
     <div className="relative w-full aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9] bg-black overflow-hidden group">
       
       {/* Fallback / Loading Image */}
-      <div 
-        className={`absolute inset-0 w-full h-full transition-opacity duration-1000 ease-in-out z-10 
-          ${showVideo ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-      >
+      <div className="absolute inset-0 w-full h-full z-0">
         {backdropPath ? (
-          <>
-            <img 
-              src={`${IMAGE_BASE_URL}${backdropPath}`} 
-              alt="Backdrop" 
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"></div>
-          </>
+          <img 
+            src={`${IMAGE_BASE_URL}${backdropPath}`} 
+            alt="Backdrop" 
+            className="w-full h-full object-cover opacity-60 md:opacity-80"
+          />
         ) : (
-          <div className="w-full h-full bg-[#111] flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-white/10 border-t-white/40 rounded-full animate-spin"></div>
-          </div>
+          <div className="w-full h-full bg-[#111]" />
         )}
+        {/* Gradients for blending and text readability */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/60 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0b] via-[#0b0b0b]/60 to-transparent w-full md:w-[70%] pointer-events-none" />
       </div>
 
-      {/* Video Player */}
-      {trailerKey && (
-        <div className={`absolute inset-0 w-full h-full scale-[1.35] md:scale-[1.1] transition-opacity duration-1000 ease-in-out z-0
-          ${showVideo ? 'opacity-100' : 'opacity-0'}
-        `}>
-          <iframe
-            ref={iframeRef}
-            src={`https://www.youtube-nocookie.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&showinfo=0&rel=0&modestbranding=1&iv_load_policy=3&enablejsapi=1&origin=${window.location.origin}&widgetid=1`}
-            allow="autoplay; encrypted-media"
-            className="w-full h-full pointer-events-none"
-            onLoad={handleIframeLoad}
-            tabIndex={-1}
+      {/* Hero Content (Logo, Watch Now Button, Metadata) */}
+      <div className="absolute inset-0 z-10 flex flex-col items-start justify-end gap-4 p-6 md:p-12 lg:p-16 w-full max-w-4xl">
+        {logoUrl ? (
+          <img 
+            src={logoUrl} 
+            alt={item.title || item.name} 
+            className="h-10 md:h-14 lg:h-16 max-w-[200px] md:max-w-[280px] object-contain object-left drop-shadow-2xl"
           />
-        </div>
-      )}
+        ) : (
+          <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-lg text-left uppercase">
+            {item.title || item.name}
+          </h2>
+        )}
 
-      {/* Vignette Overlay to blend edges into page */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-transparent to-black/30 pointer-events-none z-20"></div>
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0b] via-transparent to-[#0b0b0b] opacity-80 pointer-events-none z-20"></div>
+        <button className="bg-white text-black px-6 py-2.5 md:px-8 md:py-3 rounded-full font-bold flex items-center gap-2 transition-transform hover:scale-105 shadow-2xl text-sm md:text-base mt-2">
+          <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black" /> 
+          Watch Now
+        </button>
 
-      {/* Controls */}
-      {trailerKey && showVideo && (
-        <div className="absolute bottom-6 right-6 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <button 
-            onClick={toggleMute}
-            className="w-12 h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-          >
-            {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-          </button>
+        <div className="flex flex-col gap-2 mt-2 md:mt-4 w-full max-w-2xl">
+          <div className="flex items-center gap-3 text-xs md:text-sm text-white/70 font-medium">
+            {type === 'movie' && item.release_date && (
+              <>
+                <span>{new Date(item.release_date).getFullYear()}</span>
+                {item.runtime && <span>{Math.floor(item.runtime / 60)}h {item.runtime % 60}m</span>}
+              </>
+            )}
+            {type === 'tv' && item.first_air_date && (
+              <>
+                <span>{new Date(item.first_air_date).getFullYear()}</span>
+                {item.number_of_seasons && <span>{item.number_of_seasons} Season{item.number_of_seasons > 1 ? 's' : ''}</span>}
+              </>
+            )}
+            <div className="flex items-center gap-2">
+              {item.genres?.slice(0, 3).map((g: any, i: number) => (
+                <span key={g.id}>
+                  {g.name}
+                  {i < Math.min(item.genres.length, 3) - 1 ? ' • ' : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+          
+          {overviewText && (
+            <p className="text-xs md:text-sm lg:text-base text-white/80 leading-relaxed line-clamp-2 md:line-clamp-3 text-shadow-sm">
+              {overviewText}
+            </p>
+          )}
         </div>
-      )}
+      </div>
+
     </div>
   );
 }
