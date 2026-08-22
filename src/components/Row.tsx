@@ -8,7 +8,7 @@ interface RowProps {
   isTop10?: boolean;
 }
 
-const RowCard = ({ item, isTop10, index }: { item: any; isTop10: boolean; index: number }) => {
+const RowCard: React.FC<{ item: any; isTop10: boolean; index: number }> = ({ item, isTop10, index }) => {
   const [logo, setLogo] = useState<string | null>(null);
   const [loadingLogo, setLoadingLogo] = useState(true);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -62,7 +62,7 @@ const RowCard = ({ item, isTop10, index }: { item: any; isTop10: boolean; index:
   return (
     <div
       ref={cardRef}
-      className={`flex-shrink-0 cursor-pointer flex items-center group ${
+      className={`relative z-10 flex-shrink-0 cursor-pointer flex items-center group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110 ${
         isTop10 ? 'gap-2 md:gap-4' : 'w-[300px] md:w-[400px] lg:w-[450px]'
       }`}
       onMouseEnter={() => setIsHovered(true)}
@@ -82,11 +82,11 @@ const RowCard = ({ item, isTop10, index }: { item: any; isTop10: boolean; index:
         </div>
       )}
 
-      <div className={`relative rounded-md overflow-hidden bg-[#141414] shadow-xl aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`}>
+      <div className={`relative rounded-md overflow-hidden bg-[#141414] shadow-xl group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_15px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`}>
         <img
           src={`${IMAGE_BASE_URL_W500}${item.backdrop_path}`}
           alt={item.title || item.name}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
           loading="lazy"
           draggable={false}
         />

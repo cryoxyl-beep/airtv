@@ -14,30 +14,58 @@ const fetchOptions = {
 };
 
 export const fetchTrending = async () => {
-  const res = await fetch(`${BASE_URL}/trending/all/day?language=en-US`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/trending/all/day?language=en-US`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn("fetchTrending failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchTop10 = async () => {
-  // Using popular as a proxy for Top 10
-  const res = await fetch(`${BASE_URL}/tv/popular?language=en-US&page=1`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/tv/popular?language=en-US&page=1`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn("fetchTop10 failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchAnime = async () => {
-  // Animation genre (16) and origin country Japan (JP)
-  const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=16&origin_country=JP`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=16&origin_country=JP`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn("fetchAnime failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchAllTimeFavorites = async () => {
-  const res = await fetch(`${BASE_URL}/movie/top_rated?language=en-US&page=1`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/movie/top_rated?language=en-US&page=1`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn("fetchAllTimeFavorites failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchDetails = async (id: number, type: 'movie' | 'tv' = 'tv') => {
-  const res = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=images,credits,content_ratings,release_dates&include_image_language=en,null`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=images,credits,content_ratings,release_dates&include_image_language=en,null`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn("fetchDetails failed:", error);
+    throw error;
+  }
 };
 
 const trailerCache = new Map<string, string | null>();
@@ -119,7 +147,7 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
   }
   
   // 2. Fanart.tv Fallback
-  const FANART_API_KEY = import.meta.env.VITE_FANART_API_KEY || '[PASTE_FANART_API_KEY_HERE]';
+  const FANART_API_KEY = (import.meta as any).env.VITE_FANART_API_KEY || '[PASTE_FANART_API_KEY_HERE]';
   let fanartLogoUrl: string | null = null;
   
   if (type === 'movie') {
@@ -168,12 +196,24 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
 };
 
 export const fetchByGenre = async (genreId: number) => {
-  const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn(`fetchByGenre failed for genre ${genreId}:`, error);
+    return { results: [] };
+  }
 };
 
 export const fetchTVByGenre = async (genreId: number) => {
-  const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
-  return res.json();
+  try {
+    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
+    if (!res.ok) throw new Error('Not OK');
+    return await res.json();
+  } catch (error) {
+    console.warn(`fetchTVByGenre failed for genre ${genreId}:`, error);
+    return { results: [] };
+  }
 };
 
