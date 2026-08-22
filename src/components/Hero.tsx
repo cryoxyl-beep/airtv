@@ -3,6 +3,8 @@ import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus, Info } from 'lu
 import { useNavigate } from 'react-router-dom';
 import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo, getCachedLogo } from '../api/tmdb';
 
+import HeroSkeleton from './HeroSkeleton';
+
 interface HeroProps {
   items: any[];
 }
@@ -118,7 +120,7 @@ export default function Hero({ items }: HeroProps) {
     return () => clearTimeout(playerInitTimer);
   }, [trailerKey]);
 
-  if (!items || items.length === 0) return <div className="h-[95vh] bg-[#0b0b0b] animate-pulse" />;
+  if (!items || items.length === 0) return <HeroSkeleton />;
 
   const activeItem = items[activeIndex];
   

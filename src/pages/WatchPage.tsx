@@ -6,6 +6,8 @@ import SeasonSelector from '../components/SeasonSelector';
 import EpisodeList from '../components/EpisodeList';
 import { ArrowLeft } from 'lucide-react';
 
+import WatchPlayerSkeleton from '../components/WatchPlayerSkeleton';
+
 interface WatchPageProps {
   type: 'movie' | 'tv';
 }
@@ -54,8 +56,31 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0b0b0b] flex items-center justify-center text-white">
-        <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+      <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${type === 'tv' ? 'pb-20' : 'overflow-hidden'}`}>
+        {/* Top Nav Placeholder */}
+        <div className="absolute top-0 left-0 w-full p-6 z-50 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
+          <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
+        </div>
+
+        {/* Player Skeleton */}
+        <div className="w-full relative bg-black pt-0 lg:pt-0">
+          <WatchPlayerSkeleton type={type} />
+        </div>
+
+        {/* TV Specific Sections Skeleton */}
+        {type === 'tv' && (
+          <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
+            <div className="mt-2">
+              <div className="mb-8 w-48 h-10 bg-white/10 rounded-md animate-pulse" />
+              <div className="w-24 h-6 bg-white/10 rounded animate-pulse mb-6" />
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+                {[...Array(10)].map((_, i) => (
+                  <div key={i} className="aspect-video bg-white/5 rounded-md animate-pulse" />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -88,7 +113,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0b] font-sans text-white pb-20">
+    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${type === 'tv' ? 'pb-20' : 'overflow-hidden'}`}>
       {/* Top Nav (Minimal) */}
       <div className="absolute top-0 left-0 w-full p-6 z-50 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
         <button 
@@ -112,11 +137,9 @@ export default function WatchPage({ type }: WatchPageProps) {
       </div>
 
       {/* Details & Episode Selection Area */}
-      <div className="max-w-[1600px] mx-auto px-6 md:px-12 py-10 mt-4 md:mt-8">
-        
-        {/* TV specific sections */}
-        {type === 'tv' && data.seasons && seasonData && (
-          <div className="mt-10">
+      {type === 'tv' && data.seasons && seasonData && (
+        <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
+          <div className="mt-2">
             {/* Season Selector */}
             <div className="mb-8">
               <SeasonSelector 
@@ -138,8 +161,8 @@ export default function WatchPage({ type }: WatchPageProps) {
               onEpisodeSelect={handleEpisodeChange}
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

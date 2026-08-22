@@ -173,10 +173,27 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
         onMouseMove={handleMouseMove}
       >
         <div className={`${isTop10 ? 'w-4' : 'w-8'} shrink-0`} />
-        {items.map((item, index) => {
-          if (!item.backdrop_path) return null;
-          return <RowCard key={item.id} item={item} isTop10={isTop10} index={index} />;
-        })}
+        
+        {items.length === 0 ? (
+          [...Array(6)].map((_, index) => (
+            <div key={`skeleton-${index}`} className={`relative z-10 flex-shrink-0 flex items-center ${isTop10 ? 'gap-2 md:gap-4' : 'w-[300px] md:w-[400px] lg:w-[450px]'}`}>
+              {isTop10 && (
+                <div className="flex-shrink-0 flex items-center justify-center z-10">
+                  <span className="text-[90px] md:text-[110px] font-sans font-bold leading-none pointer-events-none select-none tracking-normal" style={{ WebkitTextStroke: '1.5px rgba(255, 255, 255, 0.4)', color: 'transparent' }}>
+                    {(index + 1).toString().padStart(2, '0')}
+                  </span>
+                </div>
+              )}
+              <div className={`relative rounded-md overflow-hidden bg-white/5 animate-pulse aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`} />
+            </div>
+          ))
+        ) : (
+          items.map((item, index) => {
+            if (!item.backdrop_path) return null;
+            return <RowCard key={item.id} item={item} isTop10={isTop10} index={index} />;
+          })
+        )}
+
         <div className={`${isTop10 ? 'w-4' : 'w-8'} shrink-0`} />
       </div>
     </div>
