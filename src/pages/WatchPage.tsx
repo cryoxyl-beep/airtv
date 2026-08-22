@@ -28,7 +28,6 @@ export default function WatchPage({ type }: WatchPageProps) {
     const loadContent = async () => {
       setLoading(true);
       setError(false);
-      window.scrollTo(0, 0); // Reset scroll on load/navigation
       try {
         if (!id) throw new Error('No ID');
         
@@ -137,7 +136,11 @@ export default function WatchPage({ type }: WatchPageProps) {
   }
 
   const handleBack = () => {
-    navigate('/');
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
   };
 
   const handleSeasonChange = (newSeason: number) => {

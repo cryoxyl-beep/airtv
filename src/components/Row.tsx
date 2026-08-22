@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo } from '../api/tmdb';
 
 interface RowProps {
@@ -133,6 +133,58 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+
+  const location = useLocation();
+  const navigationType = useNavigationType();
+
+  // Restore horizontal scroll
+  useEffect(() => {
+    if (navigationType === 'POP' && rowRef.current) {
+      const savedX = sessionStorage.getItem(`scroll-x-${location.key}-${title}`);
+      if (savedX) {
+        const x = parseInt(savedX, 10);
+        let attempts = 0;
+        const interval = setInterval(() => {
+          if (rowRef.current && items.length > 0) {
+            if (rowRef.current.scrollLeft !== x && rowRef.current.scrollWidth >= x) {
+               rowRef.current.scrollLeft = x;
+            }
+            attempts++;
+            if (attempts > 20 || rowRef.current.scrollLeft === x) {
+               clearInterval(interval);
+            }
+          } else {
+             attempts++;
+             if (attempts > 20) clearInterval(interval);
+          }
+        }, 100);
+        return () => clearInterval(interval);
+      }
+    }
+  }, [location, navigationType, title, items]);
+
+  // Save horizontal scroll
+  useEffect(() => {
+    let timeoutId: any;
+    const handleScroll = () => {
+      if (timeoutId) return;
+      timeoutId = setTimeout(() => {
+        if (rowRef.current) {
+           sessionStorage.setItem(`scroll-x-${location.key}-${title}`, rowRef.current.scrollLeft.toString());
+        }
+        timeoutId = null;
+      }, 200);
+    };
+    
+    const node = rowRef.current;
+    if (node) {
+       node.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    return () => {
+       if (node) node.removeEventListener('scroll', handleScroll);
+       if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [location, title]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
