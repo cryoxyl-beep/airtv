@@ -96,11 +96,12 @@ export default function Hero({ items }: HeroProps) {
   useEffect(() => {
     if (!trailerKey) return;
     let playerInitTimer: ReturnType<typeof setTimeout>;
+    let player: any = null;
     
     const initPlayer = () => {
       const yt = (window as any).YT;
       if (yt && yt.Player) {
-        new yt.Player('hero-trailer-player', {
+        player = new yt.Player('hero-trailer-player', {
           events: {
             onReady: (event: any) => {
               event.target.unloadModule('captions');
@@ -117,7 +118,12 @@ export default function Hero({ items }: HeroProps) {
     
     initPlayer();
 
-    return () => clearTimeout(playerInitTimer);
+    return () => {
+      clearTimeout(playerInitTimer);
+      if (player && typeof player.destroy === "function") {
+        player.destroy();
+      }
+    };
   }, [trailerKey]);
 
   if (!items || items.length === 0) return <HeroSkeleton />;

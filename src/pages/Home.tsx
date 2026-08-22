@@ -1,25 +1,32 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
 import { fetchTrending, fetchTop10, fetchAnime, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre } from '../api/tmdb';
 
+let cachedHomeData: any = null;
+
 export default function Home() {
-  const [heroItems, setHeroItems] = useState<any[]>([]);
-  const [trending, setTrending] = useState<any[]>([]);
-  const [top10, setTop10] = useState<any[]>([]);
-  
-  const [action, setAction] = useState<any[]>([]);
-  const [comedy, setComedy] = useState<any[]>([]);
-  const [romance, setRomance] = useState<any[]>([]);
-  const [scifi, setScifi] = useState<any[]>([]);
-  const [horror, setHorror] = useState<any[]>([]);
-  const [sitcom, setSitcom] = useState<any[]>([]);
-  const [family, setFamily] = useState<any[]>([]);
-  const [crime, setCrime] = useState<any[]>([]);
-  const [drama, setDrama] = useState<any[]>([]);
-  
+  const [data, setData] = useState<any>(cachedHomeData || {
+    heroItems: [],
+    trending: [],
+    top10: [],
+    action: [],
+    comedy: [],
+    romance: [],
+    scifi: [],
+    horror: [],
+    sitcom: [],
+    family: [],
+    crime: [],
+    drama: []
+  });
+
   useEffect(() => {
+    if (cachedHomeData) {
+      return;
+    }
+
     const loadData = async () => {
       const safeFetch = async (promise: Promise<any>) => {
         try {
@@ -60,26 +67,28 @@ export default function Home() {
           })
         );
         
-        setHeroItems(detailedHeroItems);
-        setTrending(trendingData.results || []);
-
         const filteredTop10 = (top10Data.results || []).filter((item: any) => {
           const title = item.title || item.name || '';
           return title !== 'Tagesschau' && title !== 'Paradise Hotel';
-        });
+        }).slice(0, 10);
         
-        setTop10(filteredTop10.slice(0, 10));
+        const newData = {
+          heroItems: detailedHeroItems,
+          trending: trendingData.results || [],
+          top10: filteredTop10,
+          action: actionData.results || [],
+          comedy: comedyData.results || [],
+          romance: romanceData.results || [],
+          scifi: scifiData.results || [],
+          horror: horrorData.results || [],
+          sitcom: sitcomData.results || [],
+          family: familyData.results || [],
+          crime: crimeData.results || [],
+          drama: dramaData.results || []
+        };
         
-        setAction(actionData.results || []);
-        setComedy(comedyData.results || []);
-        setRomance(romanceData.results || []);
-        setScifi(scifiData.results || []);
-        setHorror(horrorData.results || []);
-        setSitcom(sitcomData.results || []);
-        setFamily(familyData.results || []);
-        setCrime(crimeData.results || []);
-        setDrama(dramaData.results || []);
-
+        cachedHomeData = newData;
+        setData(newData);
       } catch (err) {
         console.error("Failed to load TMDB data", err);
       }
@@ -90,31 +99,31 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#0b0b0b] pb-20 font-sans overflow-x-hidden w-[100vw]">
-      <Hero items={heroItems} />
+      <Hero items={data.heroItems} />
       <div className="relative z-20 flex flex-col gap-10 pt-4">
         
         <Row 
           title="Trending Now" 
-          items={top10} 
+          items={data.top10} 
           isTop10={true} 
         />
         
         <Row 
           title="Suggested For You" 
-          items={trending.slice(4)} 
+          items={data.trending.slice(4)} 
         />
 
         <PlatformRow />
         
-        <Row title="Action & Adventure" items={action} />
-        <Row title="Comedies" items={comedy} />
-        <Row title="Romance" items={romance} />
-        <Row title="Sci-Fi & Fantasy" items={scifi} />
-        <Row title="Horror" items={horror} />
-        <Row title="Sitcoms" items={sitcom} />
-        <Row title="Family Movies" items={family} />
-        <Row title="Crime" items={crime} />
-        <Row title="Drama" items={drama} />
+        <Row title="Action & Adventure" items={data.action} />
+        <Row title="Comedies" items={data.comedy} />
+        <Row title="Romance" items={data.romance} />
+        <Row title="Sci-Fi & Fantasy" items={data.scifi} />
+        <Row title="Horror" items={data.horror} />
+        <Row title="Sitcoms" items={data.sitcom} />
+        <Row title="Family Movies" items={data.family} />
+        <Row title="Crime" items={data.crime} />
+        <Row title="Drama" items={data.drama} />
       </div>
     </div>
   );

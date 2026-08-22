@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 
 import { logos } from '../assets/logos';
@@ -24,16 +24,12 @@ export default function PlatformRow() {
   const navigate = useNavigate();
 
   // Restore horizontal scroll
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (navigationType === 'POP' && rowRef.current) {
       const savedX = sessionStorage.getItem(`scroll-x-${location.key}-platforms`);
       if (savedX) {
         const x = parseInt(savedX, 10);
-        requestAnimationFrame(() => {
-          if (rowRef.current) {
-            rowRef.current.scrollLeft = x;
-          }
-        });
+        if (rowRef.current) { rowRef.current.scrollLeft = x; }
       }
     }
   }, [location.key, navigationType]);

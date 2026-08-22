@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo } from '../api/tmdb';
@@ -8,6 +8,41 @@ interface RowProps {
   items: any[];
   isTop10?: boolean;
 }
+
+const visibilityListeners = new Map<Element, () => void>();
+let globalObserver: IntersectionObserver | null = null;
+
+const getGlobalObserver = () => {
+  if (typeof window === "undefined") return null;
+  if (!globalObserver) {
+    globalObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const callback = visibilityListeners.get(entry.target);
+            if (callback) {
+              callback();
+              globalObserver?.unobserve(entry.target);
+              visibilityListeners.delete(entry.target);
+            }
+          }
+        });
+      },
+      { rootMargin: "200px" }
+    );
+  }
+  return globalObserver;
+};
+
+const observeElement = (element: Element, callback: () => void) => {
+  visibilityListeners.set(element, callback);
+  getGlobalObserver()?.observe(element);
+};
+
+const unobserveElement = (element: Element) => {
+  visibilityListeners.delete(element);
+  getGlobalObserver()?.unobserve(element);
+};
 
 export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> = ({ item, isTop10 = false, index }) => {
   const initialLogo = getCachedLogo(item);
@@ -19,22 +54,16 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> 
   const navigate = useNavigate();
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { rootMargin: '200px' }
-    );
-
+    
     if (cardRef.current) {
-      observer.observe(cardRef.current);
+      observeElement(cardRef.current, () => {
+        setIsVisible(true);
+      });
     }
-
     return () => {
-      observer.disconnect();
+      if (cardRef.current) {
+        unobserveElement(cardRef.current);
+      }
     };
   }, []);
 
@@ -138,16 +167,12 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
   const navigationType = useNavigationType();
 
   // Restore horizontal scroll
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (navigationType === 'POP' && rowRef.current && items.length > 0) {
       const savedX = sessionStorage.getItem(`scroll-x-${location.key}-${title}`);
       if (savedX) {
         const x = parseInt(savedX, 10);
-        requestAnimationFrame(() => {
-          if (rowRef.current) {
-            rowRef.current.scrollLeft = x;
-          }
-        });
+        if (rowRef.current) { rowRef.current.scrollLeft = x; }
       }
     }
   }, [location.key, navigationType, title, items.length]);
