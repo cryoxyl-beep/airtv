@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo, fetchTrailer } from '../api/tmdb';
 import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX } from 'lucide-react';
+import { getVideoMutedPreference, setVideoMutedPreference } from '../utils/preferences';
 
 interface WatchPlayerProps {
   item: any;
@@ -19,7 +20,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
   const [trailerPlaying, setTrailerPlaying] = useState(false);
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [isUiHidden, setIsUiHidden] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(getVideoMutedPreference());
   const [canReveal, setCanReveal] = useState(false);
   
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -183,6 +184,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
   const toggleMute = () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
+    setVideoMutedPreference(nextMuted);
     iframeRef.current?.contentWindow?.postMessage(
       JSON.stringify({ event: 'command', func: nextMuted ? 'mute' : 'unMute', args: [] }),
       '*'
@@ -208,7 +210,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
             <iframe
               ref={iframeRef}
-              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=0&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
               className="w-full h-full pointer-events-none object-cover"
               allow="autoplay; encrypted-media"
               tabIndex={-1}

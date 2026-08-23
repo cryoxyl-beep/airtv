@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
 import { groupCache } from '../api/anilistGroups';
 import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
+import { getAnimeSeasonPreference, setAnimeSeasonPreference } from '../utils/preferences';
 import WatchPlayer from '../components/WatchPlayer';
 import SeasonSelector from '../components/SeasonSelector';
 import EpisodeList from '../components/EpisodeList';
@@ -28,6 +29,7 @@ export default function WatchPage({ type }: WatchPageProps) {
     const loadContent = async () => {
       setLoading(true);
       setError(false);
+      let isRedirecting = false;
       try {
         if (!id) throw new Error('No ID');
         
@@ -38,7 +40,20 @@ export default function WatchPage({ type }: WatchPageProps) {
             if (details) {
               details.source = 'anilist';
               details.media_type = 'anime';
-              details.animeGroup = groupCache.get(parseInt(id));
+              const group = groupCache.get(parseInt(id));
+              details.animeGroup = group;
+              
+              if (group) {
+                 const prefId = getAnimeSeasonPreference(group.groupId);
+                 if (prefId && prefId !== parseInt(id)) {
+                    const exists = group.seasons.find((s: any) => s.anilistId === prefId);
+                    if (exists) {
+                       isRedirecting = true;
+                       navigate(`/anime/${prefId}`, { replace: true });
+                       return;
+                    }
+                 }
+              }
             }
           } else {
             details = await fetchDetails(parseInt(id), type);
@@ -137,7 +152,9 @@ export default function WatchPage({ type }: WatchPageProps) {
         console.error("Failed to load watch data:", err.message || err);
         setError(true);
       } finally {
-        setLoading(false);
+        if (!isRedirecting) {
+          setLoading(false);
+        }
       }
     };
 
@@ -275,6 +292,7 @@ export default function WatchPage({ type }: WatchPageProps) {
                     }))} 
                     currentSeason={parseInt(id || "0")}
                     onSeasonChange={(newId) => {
+                       setAnimeSeasonPreference(data.animeGroup.groupId, newId);
                        navigate(`/anime/${newId}`, { replace: true });
                     }}
                   />
