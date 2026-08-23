@@ -22,7 +22,7 @@ export default function Navbar() {
   }, []);
   
   // Don't show search bar on immersive pages
-  const isImmersive = location.pathname.startsWith('/watch/');
+  const isImmersive = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/');
   
   if (isImmersive) return null;
 
