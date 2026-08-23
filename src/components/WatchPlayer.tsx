@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo, fetchTrailer } from '../api/tmdb';
 import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX } from 'lucide-react';
 
@@ -15,9 +15,25 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
-  const [canShowTrailer, setCanShowTrailer] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [trailerPlaying, setTrailerPlaying] = useState(false);
+  const [trailerEnded, setTrailerEnded] = useState(false);
+  const [isUiHidden, setIsUiHidden] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [canReveal, setCanReveal] = useState(false);
+  
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isPlayingRef = useRef(false);
+  const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  
+  useEffect(() => {
+    if (!document.getElementById('youtube-iframe-api')) {
+      const tag = document.createElement('script');
+      tag.id = 'youtube-iframe-api';
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.body.appendChild(tag);
+    }
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -38,13 +54,29 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
   useEffect(() => {
     if (!trailerKey) return;
+    const timer = setTimeout(() => {
+      setCanReveal(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [trailerKey]);
+
+  useEffect(() => {
+    if (!trailerKey) return;
     
-    // Listen for YouTube postMessage API to know exactly when it starts playing
+    // Listen for YouTube postMessage API to know exactly when it starts playing or ends
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data && data.event === 'onStateChange' && data.info === 1) {
-          setCanShowTrailer(true);
+        if (data && data.event === 'onStateChange') {
+          if (data.info === 1) { // playing
+            setTrailerPlaying(true);
+            isPlayingRef.current = true;
+          } else if (data.info === 0) { // ended
+            setTrailerEnded(true);
+            setTrailerPlaying(false);
+            setIsUiHidden(false); // Make UI permanently visible again
+            isPlayingRef.current = false;
+          }
         }
       } catch (e) {
         // ignore parse errors from other extensions/scripts
@@ -53,16 +85,76 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
     window.addEventListener('message', handleMessage);
 
-    // Fallback: if we never get the playing event, reveal after 5 seconds anyway
-    const timer = setTimeout(() => {
-      setCanShowTrailer(true);
-    }, 5000);
+    
+
+    
+
+    let playerInitTimer: ReturnType<typeof setTimeout>;
+
+    const initPlayer = () => {
+      const yt = (window as any).YT;
+      if (yt && yt.Player && iframeRef.current) {
+        new yt.Player(iframeRef.current, {
+          events: {
+            onStateChange: (event: any) => {
+              if (event.data === 1) {
+                setTrailerPlaying(true);
+                isPlayingRef.current = true;
+              } else if (event.data === 0) {
+                setTrailerEnded(true);
+                setTrailerPlaying(false);
+                setIsUiHidden(false);
+                isPlayingRef.current = false;
+              }
+            }
+          }
+        });
+      } else {
+        playerInitTimer = setTimeout(initPlayer, 100);
+      }
+    };
+
+    initPlayer();
 
     return () => {
-      clearTimeout(timer);
+      clearTimeout(playerInitTimer);
       window.removeEventListener('message', handleMessage);
     };
   }, [trailerKey]);
+
+  const resetInactivityTimer = useCallback((delay: number) => {
+    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    if (!isPlayingRef.current || trailerEnded) return;
+
+    setIsUiHidden(false);
+    inactivityTimerRef.current = setTimeout(() => {
+      if (isPlayingRef.current && !trailerEnded) {
+        setIsUiHidden(true);
+      }
+    }, delay);
+  }, [trailerEnded]);
+
+  // Initial inactivity timer when video starts
+  useEffect(() => {
+    if (trailerPlaying && !trailerEnded) {
+      resetInactivityTimer(3000);
+    } else {
+      setIsUiHidden(false);
+      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+    }
+  }, [trailerPlaying, trailerEnded, resetInactivityTimer]);
+
+  const handleMouseMove = () => {
+    if (trailerPlaying && !trailerEnded) {
+      resetInactivityTimer(2000);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (trailerPlaying && !trailerEnded) {
+      setIsUiHidden(true);
+    }
+  };
 
   const toggleMute = () => {
     const nextMuted = !isMuted;
@@ -77,18 +169,22 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
   let backdropPath = item?.backdrop_path;
   const overviewText = item.overview;
   
-  const isTrailerVisible = canShowTrailer && trailerKey !== null;
+  const isTrailerVisible = trailerPlaying && canReveal && !trailerEnded && trailerKey !== null;
 
   return (
-    <div className={`relative w-full bg-black overflow-hidden group ${type === 'movie' ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}>
+    <div 
+      className={`relative w-full bg-black overflow-hidden group ${type === 'movie' ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
       
       {/* Layer 0: YouTube Player */}
-      <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black">
-        {trailerKey && (
+      <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
+        {trailerKey && !trailerEnded && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-[1.15] pointer-events-none">
             <iframe
               ref={iframeRef}
-              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=0&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
               className="w-full h-full pointer-events-none object-cover"
               allow="autoplay; encrypted-media"
               tabIndex={-1}
@@ -103,7 +199,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           <img 
             src={`${IMAGE_BASE_URL}${backdropPath}`} 
             alt="Backdrop" 
-            className="w-full h-full object-cover opacity-60 md:opacity-80"
+            className="w-full h-full object-cover"
           />
         ) : (
           <div className="w-full h-full bg-[#111]" />
@@ -116,7 +212,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
       {/* Mute/Unmute Button */}
       {isTrailerVisible && (
-        <div className="absolute top-24 right-6 md:top-32 md:right-12 z-40 pointer-events-auto">
+        <div className={`absolute top-24 right-6 md:top-32 md:right-12 z-40 pointer-events-auto transition-opacity duration-500 ${isUiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <button
             onClick={toggleMute}
             className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-xl"
@@ -133,42 +229,48 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           
           {/* Left Side: Logo/Title & Buttons */}
           <div className="flex flex-col items-start justify-end gap-4 md:gap-5 shrink-0 md:w-5/12 lg:w-1/2 flex-1 pointer-events-none">
-            {logoUrl ? (
-              <img 
-                src={logoUrl} 
-                alt={item.title || item.name} 
-                className="h-20 md:h-28 lg:h-36 max-w-[260px] md:max-w-[400px] lg:max-w-[480px] object-contain object-left drop-shadow-2xl"
-              />
-            ) : (
-              <h2 className="text-4xl md:text-5xl lg:text-7xl font-bold tracking-tight text-white drop-shadow-lg text-left uppercase">
-                {item.title || item.name}
-              </h2>
-            )}
+            
+            <div className={`transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
+              {logoUrl ? (
+                <img 
+                  src={logoUrl} 
+                  alt={item.title || item.name} 
+                  className="h-20 md:h-28 lg:h-36 max-w-[260px] md:max-w-[400px] lg:max-w-[480px] object-contain object-left drop-shadow-2xl"
+                />
+              ) : (
+                <h2 className="text-4xl md:text-5xl lg:text-7xl font-bold tracking-tight text-white drop-shadow-lg text-left uppercase">
+                  {item.title || item.name}
+                </h2>
+              )}
+            </div>
 
             <div className="flex items-center gap-3 w-full pb-1 md:pb-2 mt-2 pointer-events-auto">
               <button className="bg-white text-black px-6 py-2.5 md:px-8 md:py-3.5 rounded-full font-bold flex items-center gap-2 md:gap-3 transition-transform hover:scale-105 shadow-2xl text-sm md:text-base">
                 <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black" /> 
                 Watch Now
               </button>
-              <button 
-                onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl ml-2"
-                aria-label="Like"
-              >
-                <ThumbsUp className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'like' ? 'fill-current text-white' : 'text-white'}`} />
-              </button>
-              <button 
-                onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
-                className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl"
-                aria-label="Dislike"
-              >
-                <ThumbsDown className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'dislike' ? 'fill-current text-white' : 'text-white'}`} />
-              </button>
+              
+              <div className={`flex items-center gap-3 transition-opacity duration-500 ${isUiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+                <button 
+                  onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
+                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl ml-2"
+                  aria-label="Like"
+                >
+                  <ThumbsUp className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'like' ? 'fill-current text-white' : 'text-white'}`} />
+                </button>
+                <button 
+                  onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
+                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl"
+                  aria-label="Dislike"
+                >
+                  <ThumbsDown className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'dislike' ? 'fill-current text-white' : 'text-white'}`} />
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Right Side: Metadata & Description */}
-          <div className="flex flex-col gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none">
+          <div className={`flex flex-col gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
             <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm lg:text-base text-white/70 font-medium drop-shadow-md">
               {type === 'movie' && item.release_date && (
                 <>
