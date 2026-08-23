@@ -24,6 +24,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isPlayingRef = useRef(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cutoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   
   useEffect(() => {
@@ -96,6 +97,23 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
       if (yt && yt.Player && iframeRef.current) {
         new yt.Player(iframeRef.current, {
           events: {
+            onReady: (event: any) => {
+              const duration = event.target.getDuration();
+              const CUTOFF_BUFFER = 15;
+              const cutoffDelay = Math.max(0, (duration - CUTOFF_BUFFER)) * 1000;
+              
+              if (duration > CUTOFF_BUFFER) {
+                cutoffTimerRef.current = setTimeout(() => {
+                  if (event.target && typeof event.target.stopVideo === 'function') {
+                    event.target.stopVideo();
+                  }
+                  setTrailerEnded(true);
+                  setTrailerPlaying(false);
+                  setIsUiHidden(false);
+                  isPlayingRef.current = false;
+                }, cutoffDelay);
+              }
+            },
             onStateChange: (event: any) => {
               if (event.data === 1) {
                 setTrailerPlaying(true);
@@ -118,6 +136,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
     return () => {
       clearTimeout(playerInitTimer);
+      if (cutoffTimerRef.current) clearTimeout(cutoffTimerRef.current);
       window.removeEventListener('message', handleMessage);
     };
   }, [trailerKey]);
@@ -181,7 +200,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
       {/* Layer 0: YouTube Player */}
       <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
         {trailerKey && !trailerEnded && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-[1.15] pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
             <iframe
               ref={iframeRef}
               src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=0&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
@@ -207,12 +226,19 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
       </div>
 
       {/* Layer 2: Gradients */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/60 to-transparent pointer-events-none z-20" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0b] via-[#0b0b0b]/60 to-transparent w-full md:w-[70%] pointer-events-none z-20" />
+      <div
+        className="absolute inset-0 pointer-events-none z-20"
+        style={{
+          background: `
+            linear-gradient(to top, rgba(11,11,11,1) 0%, rgba(11,11,11,0.55) 28%, rgba(11,11,11,0.15) 50%, transparent 65%),
+            linear-gradient(to right, rgba(11,11,11,0.85) 0%, rgba(11,11,11,0.4) 30%, transparent 60%)
+          `,
+        }}
+      />
 
       {/* Mute/Unmute Button */}
       {isTrailerVisible && (
-        <div className={`absolute top-24 right-6 md:top-32 md:right-12 z-40 pointer-events-auto transition-opacity duration-500 ${isUiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+        <div className="absolute top-6 right-6 z-50 pointer-events-auto">
           <button
             onClick={toggleMute}
             className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-xl"
@@ -225,7 +251,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
       {/* Hero Content (Logo, Watch Now Button, Metadata) */}
       <div className="absolute inset-0 z-30 flex flex-col justify-end px-6 pb-6 pt-16 md:px-12 md:pb-10 lg:px-16 lg:pb-12 w-full pointer-events-none">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-12 w-full max-w-7xl mx-auto h-full pointer-events-none">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-12 w-full h-full pointer-events-none">
           
           {/* Left Side: Logo/Title & Buttons */}
           <div className="flex flex-col items-start justify-end gap-4 md:gap-5 shrink-0 md:w-5/12 lg:w-1/2 flex-1 pointer-events-none">
@@ -270,8 +296,8 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           </div>
 
           {/* Right Side: Metadata & Description */}
-          <div className={`flex flex-col gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
-            <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm lg:text-base text-white/70 font-medium drop-shadow-md">
+          <div className={`flex flex-col md:items-end md:text-right gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
+            <div className="flex flex-wrap items-center md:justify-end gap-3 text-xs md:text-sm lg:text-base text-white/70 font-medium drop-shadow-md">
               {type === 'movie' && item.release_date && (
                 <>
                   <span>{new Date(item.release_date).getFullYear()}</span>

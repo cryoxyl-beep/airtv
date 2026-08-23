@@ -108,9 +108,7 @@ export default function PlatformRow() {
                 loading="lazy"
               />
             </div>
-            <span className="text-white/60 text-xs font-medium tracking-wide group-hover:text-white transition-colors text-center w-full leading-tight">
-              {platform.name}
-            </span>
+            
           </div>
         ))}
 

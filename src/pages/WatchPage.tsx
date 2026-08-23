@@ -94,7 +94,7 @@ export default function WatchPage({ type }: WatchPageProps) {
     return (
       <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${type === 'tv' ? 'pb-20' : 'overflow-hidden'}`}>
         {/* Top Nav Placeholder */}
-        <div className="absolute top-0 left-0 w-full p-6 z-50 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
           <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
         </div>
 
@@ -155,10 +155,10 @@ export default function WatchPage({ type }: WatchPageProps) {
   return (
     <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${type === 'tv' ? 'pb-20' : 'overflow-hidden'}`}>
       {/* Top Nav (Minimal) */}
-      <div className="absolute top-0 left-0 w-full p-6 z-50 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
+      <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
           onClick={handleBack}
-          className="p-3 bg-black/40 hover:bg-white/10 rounded-full backdrop-blur-md transition-all group"
+          className="p-3 hover:bg-white/10 rounded-full transition-all group"
           aria-label="Go Back"
         >
           <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
