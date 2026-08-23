@@ -86,7 +86,7 @@ export default function WatchPage({ type }: WatchPageProps) {
           
           let mergedEpisodes = [...anilistEpisodes];
           
-          if (details.tmdb_id && details.anime_format !== 'movie') {
+          if (details.tmdb_id && details.tmdb_type !== 'movie') {
             try {
               // Fribb gives us the exact TMDB season mapping
               const targetSeason = details.tmdb_season || 1;

@@ -174,13 +174,16 @@ export const getCachedLogo = (item: any): string | null => {
 };
 
 export const resolveLogo = async (item: any): Promise<string | null> => {
-  if (item?.source === 'anilist' && item.tmdb_id) {
+  if (item?.source === 'anilist') {
+    if (!item.tmdb_id) {
+      return null;
+    }
     item = { ...item, id: item.tmdb_id };
   }
-
   if (!item) return null;
   
-  const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+  const baseType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+  const type = baseType === 'anime' ? (item.tmdb_type || 'tv') : baseType;
   const cacheKey = `hd_logo_${type}_${item.id}`;
   const isDev = (import.meta as any).env?.DEV === true;
   

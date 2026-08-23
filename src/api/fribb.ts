@@ -1,32 +1,76 @@
-let tmdbToAnilist = new Map<number, {id: number, type: string, season?: number}>();
-let anilistToTmdb = new Map<number, {id: number, type: string, season?: number}>();
+
+export interface FribbMapping {
+  anilistId: number;
+  tmdbTvId?: number;
+  tmdbMovieId?: number;
+  seasonMapping?: number;
+  mappingFound: boolean;
+  type: string;
+}
+
+let anilistToMapping = new Map<number, FribbMapping>();
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
 
-export const initFribb = async () => {
+export const preloadFribbMapping = async () => {
   if (isInitialized) return;
   if (initPromise) return initPromise;
   
   initPromise = (async () => {
     try {
-      const response = await fetch('https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json');
-      if (!response.ok) throw new Error('Failed to fetch Fribb mapping');
+      // 1. Check local storage cache first to save download time
+      const cacheKey = 'fribb_mapping_v1';
+      const cached = typeof window !== 'undefined' && window.localStorage ? localStorage.getItem(cacheKey) : null;
       
-      const data = await response.json();
+      let data;
+      if (cached) {
+        data = JSON.parse(cached);
+      } else {
+        const response = await fetch('https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json');
+        if (!response.ok) throw new Error('Failed to fetch Fribb mapping');
+        data = await response.json();
+        try {
+          if (typeof window !== 'undefined' && window.localStorage) localStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch (e) {
+          // ignore quota errors
+        }
+      }
       
       for (const item of data) {
-        if (item.anilist_id && item.themoviedb_id) {
-          const tmdbId = item.themoviedb_id.tv || item.themoviedb_id.movie || (typeof item.themoviedb_id === 'number' ? item.themoviedb_id : null);
-          const type = item.themoviedb_id.movie ? 'movie' : 'tv';
-          const season = item.season?.tmdb;
-          if (tmdbId) {
-            anilistToTmdb.set(item.anilist_id, { id: tmdbId, type, season });
-            tmdbToAnilist.set(tmdbId, { id: item.anilist_id, type, season });
+        if (item.anilist_id) {
+          const mapping: FribbMapping = {
+            anilistId: item.anilist_id,
+            mappingFound: !!item.themoviedb_id,
+            type: item.type || 'TV'
+          };
+          
+          if (item.themoviedb_id) {
+            if (typeof item.themoviedb_id === 'number') {
+              // Legacy/fallback
+              if (item.type === 'MOVIE') {
+                mapping.tmdbMovieId = item.themoviedb_id;
+              } else {
+                mapping.tmdbTvId = item.themoviedb_id;
+              }
+            } else {
+              if (item.themoviedb_id.tv) mapping.tmdbTvId = item.themoviedb_id.tv;
+              if (item.themoviedb_id.movie) {
+                mapping.tmdbMovieId = Array.isArray(item.themoviedb_id.movie) 
+                  ? item.themoviedb_id.movie[0] 
+                  : item.themoviedb_id.movie;
+              }
+            }
           }
+          
+          if (item.season?.tmdb) {
+            mapping.seasonMapping = item.season.tmdb;
+          }
+          
+          anilistToMapping.set(item.anilist_id, mapping);
         }
       }
       isInitialized = true;
-      console.log('Fribb mapping initialized with', anilistToTmdb.size, 'entries');
+      console.log('Fribb mapping initialized with', anilistToMapping.size, 'entries');
     } catch (e) {
       console.error('Failed to initialize Fribb mapping:', e);
     }
@@ -35,11 +79,15 @@ export const initFribb = async () => {
   return initPromise;
 };
 
-export const getTmdbId = async (anilistId: number): Promise<{ id: number, type: string, season?: number } | undefined> => {
-  await initFribb();
-  return anilistToTmdb.get(anilistId);
-};
-
-export const getAnilistId = (tmdbId: number): number | undefined => {
-  return tmdbToAnilist.get(tmdbId)?.id;
+export const resolveAnimeMapping = async (anilistId: number): Promise<FribbMapping> => {
+  await preloadFribbMapping();
+  const mapping = anilistToMapping.get(anilistId);
+  if (mapping) {
+    return mapping;
+  }
+  return {
+    anilistId,
+    mappingFound: false,
+    type: 'TV'
+  };
 };

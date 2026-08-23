@@ -1,4 +1,4 @@
-import { getTmdbId } from './fribb';
+import { resolveAnimeMapping, preloadFribbMapping } from './fribb';
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
 
@@ -24,12 +24,13 @@ const fetchAniList = async (query: string, variables: any = {}) => {
 const normalizeAniListToTmdb = async (media: any): Promise<any> => {
   if (!media) return null;
   
-  const tmdbMapping = await getTmdbId(media.id);
-  const tmdbId = tmdbMapping?.id;
-  const tmdbType = tmdbMapping?.type || 'tv';
-  const tmdbSeason = tmdbMapping?.season;
+    const mapping = await resolveAnimeMapping(media.id);
+  const isMovieFormat = media.format === 'MOVIE' || mapping.type === 'MOVIE';
+  const tmdbId = isMovieFormat && mapping.tmdbMovieId ? mapping.tmdbMovieId : (mapping.tmdbTvId || mapping.tmdbMovieId);
+  const tmdbType = (isMovieFormat && mapping.tmdbMovieId) ? 'movie' : (mapping.tmdbTvId ? 'tv' : 'movie');
+  const tmdbSeason = mapping.seasonMapping;
   
-  if (!tmdbId) {
+  if (!mapping.mappingFound) {
     console.log('[Fribb] NO TMDB MATCH for AniList ID:', media.id, media.title?.english || media.title?.romaji);
   }
 
@@ -42,6 +43,8 @@ const normalizeAniListToTmdb = async (media: any): Promise<any> => {
     id: media.id,
     tmdb_id: tmdbId, // keep track of the tmdb ID
     tmdb_season: tmdbSeason, // keep track of mapped tmdb season
+    tmdb_type: tmdbType,
+    fribb_mapping: mapping, // full mapping details
     source: 'anilist',
     media_type: 'anime', // explicitly mark as anime
     anime_format: tmdbType, // but keep the format if we need to know if it's a movie or tv
@@ -64,6 +67,7 @@ const normalizeAniListToTmdb = async (media: any): Promise<any> => {
 };
 
 export const fetchTrendingAnime = async (perPage = 10) => {
+  await preloadFribbMapping();
   const query = `
     query ($perPage: Int) {
       Page (page: 1, perPage: $perPage) {
@@ -94,6 +98,7 @@ export const fetchTrendingAnime = async (perPage = 10) => {
 };
 
 export const fetchNewlyAddedAnime = async (perPage = 10) => {
+  await preloadFribbMapping();
   const query = `
     query ($perPage: Int) {
       Page (page: 1, perPage: $perPage) {
@@ -124,6 +129,7 @@ export const fetchNewlyAddedAnime = async (perPage = 10) => {
 };
 
 export const fetchAnimeDetails = async (id: number) => {
+  await preloadFribbMapping();
   const query = `
     query ($id: Int) {
       Media (id: $id, type: ANIME) {
@@ -157,6 +163,7 @@ export const fetchAnimeDetails = async (id: number) => {
 };
 
 export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
+  await preloadFribbMapping();
   const query = `
     query ($genre: String, $perPage: Int) {
       Page (page: 1, perPage: $perPage) {
@@ -187,6 +194,7 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
 };
 
 export const searchAnime = async (search: string, perPage = 20) => {
+  await preloadFribbMapping();
   const query = `
     query ($search: String, $perPage: Int) {
       Page (page: 1, perPage: $perPage) {
