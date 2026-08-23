@@ -241,7 +241,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
         <div className="absolute top-6 right-6 z-50 pointer-events-auto">
           <button
             onClick={toggleMute}
-            className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 transition-all shadow-xl"
+            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
             aria-label={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
@@ -256,7 +256,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           {/* Left Side: Logo/Title & Buttons */}
           <div className="flex flex-col items-start justify-end gap-4 md:gap-5 shrink-0 md:w-5/12 lg:w-1/2 flex-1 pointer-events-none">
             
-            <div className={`transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
+            <div className="transition-opacity duration-500">
               {logoUrl ? (
                 <img 
                   src={logoUrl} 
@@ -276,7 +276,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
                 Watch Now
               </button>
               
-              <div className={`flex items-center gap-3 transition-opacity duration-500 ${isUiHidden ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
                   className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl ml-2"
@@ -296,7 +296,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
           </div>
 
           {/* Right Side: Metadata & Description */}
-          <div className={`flex flex-col md:items-end md:text-right gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none transition-opacity duration-500 ${isUiHidden ? 'opacity-0' : 'opacity-100'}`}>
+          <div className="flex flex-col md:items-end md:text-right gap-2 md:gap-3 md:w-7/12 lg:w-1/2 md:pb-2 pointer-events-none">
             <div className="flex flex-wrap items-center md:justify-end gap-3 text-xs md:text-sm lg:text-base text-white/70 font-medium drop-shadow-md">
               {type === 'movie' && item.release_date && (
                 <>

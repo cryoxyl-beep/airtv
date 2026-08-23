@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import WatchPage from './pages/WatchPage';
 import BrowsePage from './pages/BrowsePage';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
+import Navbar from './components/Navbar';
 
 function ScrollManager() {
   useScrollRestoration();
@@ -14,6 +15,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollManager />
+      <Navbar />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />

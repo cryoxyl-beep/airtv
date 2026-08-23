@@ -134,6 +134,7 @@ export default function Hero({ items }: HeroProps) {
 
   return (
     <div className="relative w-full min-h-[95vh] overflow-hidden bg-[#0b0b0b] flex flex-col justify-end pb-12 pt-32">
+
       
       {/* Layer 0: YouTube Player */}
       <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-[#0b0b0b]">

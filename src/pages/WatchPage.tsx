@@ -158,7 +158,7 @@ export default function WatchPage({ type }: WatchPageProps) {
       <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
           onClick={handleBack}
-          className="p-3 hover:bg-white/10 rounded-full transition-all group"
+          className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
           aria-label="Go Back"
         >
           <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
