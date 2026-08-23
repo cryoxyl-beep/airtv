@@ -154,11 +154,15 @@ function GridCard({ item }: { item: any }) {
     <div
       className="cursor-pointer group relative transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110"
       onClick={() => {
-        const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
-        if (type === 'tv') {
-          navigate(`/watch/tv/${item.id}`);
+        if (item.source === 'anilist') {
+          navigate(`/anime/${item.id}`);
         } else {
-          navigate(`/watch/movie/${item.id}`);
+          const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+          if (type === 'tv') {
+            navigate(`/watch/tv/${item.id}`);
+          } else {
+            navigate(`/watch/movie/${item.id}`);
+          }
         }
       }}
     >

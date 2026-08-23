@@ -103,11 +103,15 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> 
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
-        const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
-        if (type === 'tv') {
-          navigate(`/watch/tv/${item.id}`);
+        if (item.source === 'anilist') {
+          navigate(`/anime/${item.id}`);
         } else {
-          navigate(`/watch/movie/${item.id}`);
+          const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+          if (type === 'tv') {
+            navigate(`/watch/tv/${item.id}`);
+          } else {
+            navigate(`/watch/movie/${item.id}`);
+          }
         }
       }}
     >
@@ -127,7 +131,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> 
 
       <div className={`relative rounded-md overflow-hidden bg-[#141414] border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`}>
         <img
-          src={`${IMAGE_BASE_URL_W500}${item.backdrop_path}`}
+          src={(item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL_W500}${item.backdrop_path}`)}
           alt={item.title || item.name}
           className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
           loading="lazy"

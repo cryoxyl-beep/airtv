@@ -2,7 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
-import { fetchTrending, fetchTop10, fetchAnime, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre } from '../api/tmdb';
+import { fetchTrendingAnime, fetchNewlyAddedAnime, fetchAnimeByGenre } from '../api/anilist';
+import { fetchTrending, fetchTop10, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre } from '../api/tmdb';
 
 let cachedHomeData: any = null;
 
@@ -41,9 +42,8 @@ export default function Home() {
         const [
           trendingData, top10Data,
           actionData, comedyData, romanceData, scifiData, horrorData,
-          sitcomData, familyData, crimeData, dramaData
-        ] = await Promise.all([
-          safeFetch(fetchTrending()),
+          sitcomData, familyData, crimeData, dramaData, trendingAnimeData, newlyAddedAnimeData, romanceAnimeData, actionAnimeData, comedyAnimeData, dramaAnimeData] = await Promise.all([
+safeFetch(fetchTrending()),
           safeFetch(fetchTop10()),
           safeFetch(fetchByGenre(28)), // Action
           safeFetch(fetchByGenre(35)), // Comedy
@@ -53,12 +53,43 @@ export default function Home() {
           safeFetch(fetchTVByGenre(35)), // Sitcoms
           safeFetch(fetchByGenre(10751)), // Family
           safeFetch(fetchByGenre(80)), // Crime
-          safeFetch(fetchByGenre(18)) // Drama
-        ]);
+          safeFetch(fetchByGenre(18)), // Drama
+          safeFetch(fetchTrendingAnime(10)),
+          safeFetch(fetchNewlyAddedAnime(10)),
+          safeFetch(fetchAnimeByGenre('Romance', 10)),
+          safeFetch(fetchAnimeByGenre('Action', 10)),
+          safeFetch(fetchAnimeByGenre('Comedy', 10)),
+          safeFetch(fetchAnimeByGenre('Drama', 10))
+]);
         
-        const top10Trending = trendingData.results?.slice(0, 10) || [];
+        
+        // Assemble Hero
+        const animePool = [...(trendingAnimeData.results || []), ...(newlyAddedAnimeData.results || [])]
+          .filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i) // unique
+          .filter(a => !(a.title && a.title.toLowerCase().includes('polar opposite')));
+        
+        // Ensure we don't pick undefined items
+        const selectedAnime = animePool.slice(0, 3);
+        
+        // Filter out anime from trendingData (should already be done by tmdb filter)
+        // and separate by type
+        const tvPool = (trendingData.results || []).filter((i: any) => i.media_type === 'tv' && i.id);
+        const moviePool = (trendingData.results || []).filter((i: any) => i.media_type === 'movie' && i.id);
+        
+        const selectedTv = tvPool.slice(0, 3);
+        const selectedMovie = moviePool.slice(0, 4);
+        
+        const combinedHeroItems = [...selectedAnime, ...selectedTv, ...selectedMovie];
+        
+        // Shuffle
+        for (let i = combinedHeroItems.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [combinedHeroItems[i], combinedHeroItems[j]] = [combinedHeroItems[j], combinedHeroItems[i]];
+        }
+        
         const detailedHeroItems = await Promise.all(
-          top10Trending.map(async (item: any) => {
+          combinedHeroItems.map(async (item: any) => {
+            if (item.source === 'anilist') return item; // No extra fetch needed for AniList right now unless we want more details
             try {
               return await fetchDetails(item.id, item.media_type || 'movie');
             } catch (e) {
@@ -72,20 +103,32 @@ export default function Home() {
           return title !== 'Tagesschau' && title !== 'Paradise Hotel';
         }).slice(0, 10);
         
+        
+        const mix = (tmdb: any[], anilist: any[]) => {
+          const res = [];
+          const max = Math.max(tmdb.length, anilist.length);
+          for (let i = 0; i < max; i++) {
+            if (tmdb[i]) res.push(tmdb[i]);
+            if (anilist[i]) res.push(anilist[i]);
+          }
+          return res;
+        };
+        
         const newData = {
           heroItems: detailedHeroItems,
           trending: trendingData.results || [],
           top10: filteredTop10,
-          action: actionData.results || [],
-          comedy: comedyData.results || [],
-          romance: romanceData.results || [],
+          action: mix(actionData.results || [], actionAnimeData.results || []),
+          comedy: mix(comedyData.results || [], comedyAnimeData.results || []),
+          romance: mix(romanceData.results || [], romanceAnimeData.results || []),
           scifi: scifiData.results || [],
           horror: horrorData.results || [],
           sitcom: sitcomData.results || [],
           family: familyData.results || [],
           crime: crimeData.results || [],
-          drama: dramaData.results || []
+          drama: mix(dramaData.results || [], dramaAnimeData.results || [])
         };
+
         
         cachedHomeData = newData;
         setData(newData);

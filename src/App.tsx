@@ -20,6 +20,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />
         <Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />
+        <Route path="/anime/:id" element={<WatchPage type="anime" />} />
         <Route path="/browse/:platform" element={<BrowsePage />} />
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -5,6 +5,27 @@ export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/original';
 export const IMAGE_BASE_URL_W500 = 'https://image.tmdb.org/t/p/w500';
 export const IMAGE_BASE_URL_W300 = 'https://image.tmdb.org/t/p/w300';
 
+
+export const isAnime = (item: any): boolean => {
+  if (!item) return false;
+  // If it comes from our AniList source, it's anime
+  if (item.source === 'anilist') return false; 
+  
+  const isAnimation = item.genre_ids?.includes(16) || item.genres?.some((g: any) => g.id === 16);
+  const isJP = item.origin_country?.includes('JP') || item.original_language === 'ja';
+  
+  if (isAnimation && isJP) return true;
+  if (item.original_language === 'ja' && (item.media_type === 'tv' || item.type === 'Scripted')) return true;
+  
+  return false;
+};
+
+export const filterOutAnime = (results: any[]): any[] => {
+  if (!Array.isArray(results)) return [];
+  return results.filter(item => !isAnime(item));
+};
+
+
 const fetchOptions = {
   method: 'GET',
   headers: {
@@ -17,7 +38,11 @@ export const fetchTrending = async () => {
   try {
     const res = await fetch(`${BASE_URL}/trending/all/day?language=en-US`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn("fetchTrending failed:", error);
     return { results: [] };
@@ -28,7 +53,11 @@ export const fetchTop10 = async () => {
   try {
     const res = await fetch(`${BASE_URL}/tv/popular?language=en-US&page=1`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn("fetchTop10 failed:", error);
     return { results: [] };
@@ -50,7 +79,11 @@ export const fetchAllTimeFavorites = async () => {
   try {
     const res = await fetch(`${BASE_URL}/movie/top_rated?language=en-US&page=1`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn("fetchAllTimeFavorites failed:", error);
     return { results: [] };
@@ -115,8 +148,13 @@ interface CachedLogo {
 }
 
 export const getCachedLogo = (item: any): string | null => {
+  if (item?.source === 'anilist' && item.tmdb_id) {
+    item = { ...item, id: item.tmdb_id };
+  }
+
   if (!item) return null;
-  const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+  const baseType = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+  const type = baseType === 'anime' ? (item.anime_format || 'tv') : baseType;
   const cacheKey = `hd_logo_${type}_${item.id}`;
   
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -136,6 +174,10 @@ export const getCachedLogo = (item: any): string | null => {
 };
 
 export const resolveLogo = async (item: any): Promise<string | null> => {
+  if (item?.source === 'anilist' && item.tmdb_id) {
+    item = { ...item, id: item.tmdb_id };
+  }
+
   if (!item) return null;
   
   const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
@@ -280,7 +322,11 @@ export const fetchByGenre = async (genreId: number) => {
   try {
     const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn(`fetchByGenre failed for genre ${genreId}:`, error);
     return { results: [] };
@@ -291,7 +337,11 @@ export const fetchTVByGenre = async (genreId: number) => {
   try {
     const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn(`fetchTVByGenre failed for genre ${genreId}:`, error);
     return { results: [] };
@@ -334,7 +384,11 @@ export const fetchByProvider = async (providerId: number) => {
   try {
     const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn(`fetchByProvider failed for provider ${providerId}:`, error);
     return { results: [] };
@@ -345,7 +399,11 @@ export const fetchTVByProvider = async (providerId: number) => {
   try {
     const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
-    return await res.json();
+    const data = await res.json();
+    if (data && data.results) {
+      data.results = filterOutAnime(data.results);
+    }
+    return data;
   } catch (error) {
     console.warn(`fetchTVByProvider failed for provider ${providerId}:`, error);
     return { results: [] };

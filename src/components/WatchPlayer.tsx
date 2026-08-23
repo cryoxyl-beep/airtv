@@ -4,7 +4,7 @@ import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX } from 'lucide-react';
 
 interface WatchPlayerProps {
   item: any;
-  type: 'movie' | 'tv';
+  type: 'movie' | 'tv' | 'anime';
   seasonNumber?: number;
   episodeNumber?: number;
   seasonData?: any;
@@ -44,7 +44,11 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
       }
     });
     
-    fetchTrailer(item.id, type).then(key => {
+    const fetchT = item.source === 'anilist'
+      ? Promise.resolve(item.trailer)
+      : fetchTrailer(item.id, type === 'anime' ? 'tv' : type);
+      
+    fetchT.then(key => {
       if (mounted && key) {
         setTrailerKey(key);
       }
@@ -216,7 +220,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
       <div className={`absolute inset-0 w-full h-full z-10 pointer-events-none transition-opacity duration-700 ease-in-out ${isTrailerVisible ? 'opacity-0' : 'opacity-100'}`}>
         {backdropPath ? (
           <img 
-            src={`${IMAGE_BASE_URL}${backdropPath}`} 
+            src={(backdropPath?.startsWith('http') ? backdropPath : `${IMAGE_BASE_URL}${backdropPath}`)} 
             alt="Backdrop" 
             className="w-full h-full object-cover"
           />

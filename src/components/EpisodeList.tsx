@@ -15,7 +15,7 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
         
         return (
           <div 
-            key={episode.id}
+            key={episode.id || episode.episode_number}
             onClick={() => onEpisodeSelect(episode.episode_number)}
             className="flex flex-col gap-3 group cursor-pointer relative z-10 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110"
           >
@@ -25,7 +25,7 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
             `}>
               {episode.still_path ? (
                 <img 
-                  src={`${IMAGE_BASE_URL_W500}${episode.still_path}`}
+                  src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
                   alt={episode.name}
                   className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
                   loading="lazy"

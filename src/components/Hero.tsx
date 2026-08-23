@@ -55,8 +55,11 @@ export default function Hero({ items }: HeroProps) {
     
     if (!activeItem) return;
 
-    fetchTrailer(activeItem.id, activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie'))
-      .then(key => {
+    const fetchT = activeItem.source === 'anilist' 
+      ? Promise.resolve(activeItem.trailer)
+      : fetchTrailer(activeItem.id, activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie'));
+    
+    fetchT.then(key => {
         if (isCurrent && key) {
           setTrailerKey(key);
         }
@@ -160,7 +163,7 @@ export default function Hero({ items }: HeroProps) {
           return (
             <img 
               key={`base-${item.id}`}
-              src={`${IMAGE_BASE_URL}${item.backdrop_path}`} 
+              src={(item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL}${item.backdrop_path}`)} 
               alt={item.title || item.name} 
               className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-700 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`}
             />
@@ -194,12 +197,16 @@ export default function Hero({ items }: HeroProps) {
           <div className="flex items-center gap-4 mt-2">
             <button 
               onClick={() => {
-                const type = activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie');
-                if (type === 'tv') {
-                  navigate(`/watch/tv/${activeItem.id}`);
-                } else {
-                  navigate(`/watch/movie/${activeItem.id}`);
-                }
+                if (activeItem.source === 'anilist') {
+          navigate(`/anime/${activeItem.id}`);
+        } else {
+          const type = activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie');
+          if (type === 'tv') {
+            navigate(`/watch/tv/${activeItem.id}`);
+          } else {
+            navigate(`/watch/movie/${activeItem.id}`);
+          }
+        }
               }}
               className="bg-white text-black px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition hover:bg-gray-200 shadow-lg"
             >
@@ -219,7 +226,7 @@ export default function Hero({ items }: HeroProps) {
             <div key={item.id} className="flex flex-col gap-3 cursor-pointer shrink-0" onClick={() => setActiveIndex(idx)}>
               <div className={`w-[70px] h-[105px] rounded-md overflow-hidden transition-all duration-300 ${idx === activeIndex ? 'ring-1 ring-white opacity-100' : 'opacity-40 hover:opacity-100'}`}>
                 <img 
-                  src={`${IMAGE_BASE_URL_W500}${item.poster_path}`} 
+                  src={(item.poster_path?.startsWith('http') ? item.poster_path : `${IMAGE_BASE_URL_W500}${item.poster_path}`)} 
                   alt={item.title || item.name}
                   className="w-full h-full object-cover"
                   loading="lazy"

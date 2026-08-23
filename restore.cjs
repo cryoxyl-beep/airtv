@@ -1,4 +1,6 @@
-import React, { useEffect, useState, useRef } from 'react';
+const fs = require('fs');
+
+const fullCode = `import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
 import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
@@ -43,7 +45,7 @@ export default function WatchPage({ type }: WatchPageProps) {
           }
         } catch (e: any) {
           console.error("fetchDetails failed:", e);
-          throw new Error(`Details fetch failed: ${e.message}`);
+          throw new Error(\`Details fetch failed: \${e.message}\`);
         }
         
         setData(details);
@@ -51,38 +53,13 @@ export default function WatchPage({ type }: WatchPageProps) {
         // 2. If TV show, fetch specific season details
         if (type === 'anime') {
           // Construct base episodes from AniList count
-          // Construct base episodes from AniList count
           const numEpisodes = details.number_of_episodes || 1;
-          const streamingEps = details.anilist_raw?.streamingEpisodes || [];
-          
-          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => {
-            const epNum = i + 1;
-            // Try to find a matching streaming episode to extract the title
-            // Usually titles are like "Episode 1 - Title" or "1 - Title"
-            let epName = `Episode ${epNum}`;
-            let epThumb = null;
-            
-            const match = streamingEps.find((se: any) => {
-              return se.title?.includes(`Episode ${epNum}`) || se.title?.startsWith(`${epNum} -`);
-            });
-            
-            if (match) {
-              const parts = match.title.split('-');
-              if (parts.length > 1) {
-                epName = parts.slice(1).join('-').trim();
-              } else {
-                epName = match.title;
-              }
-              epThumb = match.thumbnail;
-            }
-            
-            return {
-              episode_number: epNum,
-              name: epName,
-              overview: '',
-              still_path: epThumb
-            };
-          });
+          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => ({
+            episode_number: i + 1,
+            name: \`Episode \${i + 1}\`,
+            overview: '',
+            still_path: null
+          }));
           
           let mergedEpisodes = [...anilistEpisodes];
           
@@ -93,14 +70,25 @@ export default function WatchPage({ type }: WatchPageProps) {
               const tmdbSeasonData = await fetchTVSeason(details.tmdb_id, targetSeason);
               
               if (tmdbSeasonData && tmdbSeasonData.episodes) {
-                // Merge ONLY TMDB thumbnails into our AniList episodes
+                // Merge TMDB thumbnails and names into our AniList episodes
                 mergedEpisodes = mergedEpisodes.map(ep => {
                   const tmdbEp = tmdbSeasonData.episodes.find((t: any) => t.episode_number === ep.episode_number);
                   return {
                     ...ep,
-                    still_path: tmdbEp?.still_path || ep.still_path
+                    name: tmdbEp?.name && tmdbEp.name !== \`Episode \${ep.episode_number}\` ? tmdbEp.name : ep.name,
+                    overview: tmdbEp?.overview || ep.overview,
+                    still_path: tmdbEp?.still_path || null
                   };
                 });
+                
+                // If TMDB has more episodes than AniList knows about, append them
+                tmdbSeasonData.episodes.forEach((tmdbEp: any) => {
+                  if (!mergedEpisodes.find(ep => ep.episode_number === tmdbEp.episode_number)) {
+                    mergedEpisodes.push(tmdbEp);
+                  }
+                });
+                // Sort to ensure order
+                mergedEpisodes.sort((a, b) => a.episode_number - b.episode_number);
               }
             } catch (e) {
               console.warn("Failed to fetch TMDB season data for anime", e);
@@ -159,7 +147,7 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+      <div className={\`min-h-screen bg-[#0b0b0b] font-sans text-white \${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}\`}>
         {/* Top Nav Placeholder */}
         <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
           <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
@@ -167,7 +155,7 @@ export default function WatchPage({ type }: WatchPageProps) {
 
         {/* Player Skeleton */}
         <div className="w-full relative bg-black pt-0 lg:pt-0">
-          <WatchPlayerSkeleton type={type === 'anime' ? 'tv' : type} />
+          <WatchPlayerSkeleton type={type} />
         </div>
 
         {/* TV Specific Sections Skeleton */}
@@ -220,7 +208,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   };
 
   return (
-    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+    <div className={\`min-h-screen bg-[#0b0b0b] font-sans text-white \${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}\`}>
       {/* Top Nav (Minimal) */}
       <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
@@ -275,3 +263,5 @@ export default function WatchPage({ type }: WatchPageProps) {
     </div>
   );
 }
+`;
+fs.writeFileSync('src/pages/WatchPage.tsx', fullCode, 'utf8');
