@@ -10,7 +10,7 @@ export default function Navbar() {
   useEffect(() => {
     const handleScroll = () => {
       // Hide when scrolled past the hero section (approx 90% of viewport height)
-      if (window.scrollY > window.innerHeight * 0.9) {
+      if (window.scrollY > 0) {
         setIsVisible(false);
       } else {
         setIsVisible(true);

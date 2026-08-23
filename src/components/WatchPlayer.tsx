@@ -8,9 +8,10 @@ interface WatchPlayerProps {
   seasonNumber?: number;
   episodeNumber?: number;
   seasonData?: any;
+  forceFullScreen?: boolean;
 }
 
-export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, seasonData }: WatchPlayerProps) {
+export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen }: WatchPlayerProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   
@@ -196,7 +197,7 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
 
   return (
     <div 
-      className={`relative w-full bg-black overflow-hidden group ${type === 'movie' ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
+      className={`relative w-full bg-black overflow-hidden group ${type === 'movie' || forceFullScreen ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
@@ -283,14 +284,14 @@ export default function WatchPlayer({ item, type, seasonNumber, episodeNumber, s
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
-                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl ml-2"
+                  className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group ml-2"
                   aria-label="Like"
                 >
                   <ThumbsUp className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'like' ? 'fill-current text-white' : 'text-white'}`} />
                 </button>
                 <button 
                   onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
-                  className="w-10 h-10 md:w-12 md:h-12 rounded-full border border-white/30 bg-black/40 backdrop-blur-md flex items-center justify-center text-white hover:bg-white/20 hover:scale-105 transition-all shadow-xl"
+                  className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
                   aria-label="Dislike"
                 >
                   <ThumbsDown className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'dislike' ? 'fill-current text-white' : 'text-white'}`} />

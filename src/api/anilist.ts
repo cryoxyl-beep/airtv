@@ -1,4 +1,5 @@
 import { resolveAnimeMapping, preloadFribbMapping } from './fribb';
+import { buildAnimeGroup, nodeCache, groupCache } from './anilistGroups';
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
 
@@ -24,7 +25,8 @@ const fetchAniList = async (query: string, variables: any = {}) => {
 const normalizeAniListToTmdb = async (media: any): Promise<any> => {
   if (!media) return null;
   
-    const mapping = await resolveAnimeMapping(media.id);
+    buildAnimeGroup(media);
+  const mapping = await resolveAnimeMapping(media.id);
   const isMovieFormat = media.format === 'MOVIE' || mapping.type === 'MOVIE';
   const tmdbId = isMovieFormat && mapping.tmdbMovieId ? mapping.tmdbMovieId : (mapping.tmdbTvId || mapping.tmdbMovieId);
   const tmdbType = (isMovieFormat && mapping.tmdbMovieId) ? 'movie' : (mapping.tmdbTvId ? 'tv' : 'movie');
@@ -83,6 +85,46 @@ export const fetchTrendingAnime = async (perPage = 10) => {
           episodes
           genres
           trailer { id site }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              title { romaji english native }
+              description
+              coverImage { extraLarge large }
+              bannerImage
+              averageScore
+              startDate { year month day }
+              status
+              episodes
+              genres
+              trailer { id site }
+              format
+              type
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english native }
+                    description
+                    coverImage { extraLarge large }
+                    bannerImage
+                    averageScore
+                    startDate { year month day }
+                    status
+                    episodes
+                    genres
+                    trailer { id site }
+                    format
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
         }
       }
     }
@@ -90,7 +132,7 @@ export const fetchTrendingAnime = async (perPage = 10) => {
   try {
     const data = await fetchAniList(query, { perPage });
     const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
-    return { results: results.filter(Boolean) };
+    return { results: await deduplicateAnimeList(results.filter(Boolean)) };
   } catch (e) {
     console.error('fetchTrendingAnime failed:', e);
     return { results: [] };
@@ -114,6 +156,46 @@ export const fetchNewlyAddedAnime = async (perPage = 10) => {
           episodes
           genres
           trailer { id site }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              title { romaji english native }
+              description
+              coverImage { extraLarge large }
+              bannerImage
+              averageScore
+              startDate { year month day }
+              status
+              episodes
+              genres
+              trailer { id site }
+              format
+              type
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english native }
+                    description
+                    coverImage { extraLarge large }
+                    bannerImage
+                    averageScore
+                    startDate { year month day }
+                    status
+                    episodes
+                    genres
+                    trailer { id site }
+                    format
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
         }
       }
     }
@@ -121,7 +203,7 @@ export const fetchNewlyAddedAnime = async (perPage = 10) => {
   try {
     const data = await fetchAniList(query, { perPage });
     const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
-    return { results: results.filter(Boolean) };
+    return { results: await deduplicateAnimeList(results.filter(Boolean)) };
   } catch (e) {
     console.error('fetchNewlyAddedAnime failed:', e);
     return { results: [] };
@@ -144,6 +226,46 @@ export const fetchAnimeDetails = async (id: number) => {
         episodes
         genres
         trailer { id site }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              title { romaji english native }
+              description
+              coverImage { extraLarge large }
+              bannerImage
+              averageScore
+              startDate { year month day }
+              status
+              episodes
+              genres
+              trailer { id site }
+              format
+              type
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english native }
+                    description
+                    coverImage { extraLarge large }
+                    bannerImage
+                    averageScore
+                    startDate { year month day }
+                    status
+                    episodes
+                    genres
+                    trailer { id site }
+                    format
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
         streamingEpisodes {
           title
           thumbnail
@@ -179,6 +301,46 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
           episodes
           genres
           trailer { id site }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              title { romaji english native }
+              description
+              coverImage { extraLarge large }
+              bannerImage
+              averageScore
+              startDate { year month day }
+              status
+              episodes
+              genres
+              trailer { id site }
+              format
+              type
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english native }
+                    description
+                    coverImage { extraLarge large }
+                    bannerImage
+                    averageScore
+                    startDate { year month day }
+                    status
+                    episodes
+                    genres
+                    trailer { id site }
+                    format
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
         }
       }
     }
@@ -186,7 +348,7 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
   try {
     const data = await fetchAniList(query, { genre, perPage });
     const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
-    return { results: results.filter(Boolean) };
+    return { results: await deduplicateAnimeList(results.filter(Boolean)) };
   } catch (e) {
     console.error(`fetchAnimeByGenre failed for ${genre}:`, e);
     return { results: [] };
@@ -210,6 +372,46 @@ export const searchAnime = async (search: string, perPage = 20) => {
           episodes
           genres
           trailer { id site }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              title { romaji english native }
+              description
+              coverImage { extraLarge large }
+              bannerImage
+              averageScore
+              startDate { year month day }
+              status
+              episodes
+              genres
+              trailer { id site }
+              format
+              type
+              relations {
+                edges {
+                  relationType
+                  node {
+                    id
+                    title { romaji english native }
+                    description
+                    coverImage { extraLarge large }
+                    bannerImage
+                    averageScore
+                    startDate { year month day }
+                    status
+                    episodes
+                    genres
+                    trailer { id site }
+                    format
+                    type
+                  }
+                }
+              }
+            }
+          }
+        }
         }
       }
     }
@@ -217,9 +419,40 @@ export const searchAnime = async (search: string, perPage = 20) => {
   try {
     const data = await fetchAniList(query, { search, perPage });
     const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
-    return { results: results.filter(Boolean) };
+    return { results: await deduplicateAnimeList(results.filter(Boolean)) };
   } catch (e) {
     console.error(`searchAnime failed for ${search}:`, e);
     return { results: [] };
   }
+};
+
+export const deduplicateAnimeList = async (results: any[]) => {
+  const seenFranchise = new Set<number>();
+  const finalResults = [];
+  
+  for (const item of results) {
+    if (!item || !item.anilist_raw) continue;
+    const group = buildAnimeGroup(item.anilist_raw);
+    const groupId = group ? group.groupId : item.id;
+    
+    if (!seenFranchise.has(groupId)) {
+      seenFranchise.add(groupId);
+      
+      if (group && groupId !== item.id) {
+        // Swap with canonical parent
+        const canonicalRaw = nodeCache.get(groupId);
+        if (canonicalRaw) {
+          // ensure relations are copied over so we don't lose the group if someone clicks on the canonical item
+          if (!canonicalRaw.relations) canonicalRaw.relations = item.anilist_raw.relations;
+          const canonicalNorm = await normalizeAniListToTmdb(canonicalRaw);
+          if (canonicalNorm) finalResults.push(canonicalNorm);
+        } else {
+          finalResults.push(item);
+        }
+      } else {
+        finalResults.push(item);
+      }
+    }
+  }
+  return finalResults;
 };

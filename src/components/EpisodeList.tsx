@@ -5,9 +5,10 @@ interface EpisodeListProps {
   episodes: any[];
   currentEpisode: number;
   onEpisodeSelect: (episodeNumber: number) => void;
+  isAnime?: boolean;
 }
 
-export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect }: EpisodeListProps) {
+export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect, isAnime }: EpisodeListProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {episodes.map((episode) => {
@@ -43,27 +44,31 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect 
                 {episode.episode_number}. {episode.name}
               </h3>
               
-              <p className="text-sm text-white/50 line-clamp-2 leading-relaxed">
-                {episode.overview || "No description available."}
-              </p>
-              
-              {/* Metadata row */}
-              <div className="flex items-center gap-3 mt-1 text-xs text-white/40 font-medium">
-                {/* Mock rating */}
-                <span className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">U/A 16+</span>
-                
-                {episode.runtime && (
-                  <span className="flex items-center gap-1">
-                    {episode.runtime}min
-                  </span>
-                )}
-                
-                {episode.air_date && (
-                  <span>
-                    {new Date(episode.air_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </span>
-                )}
-              </div>
+              {!isAnime && (
+                <>
+                  <p className="text-sm text-white/50 line-clamp-2 leading-relaxed">
+                    {episode.overview || "No description available."}
+                  </p>
+                  
+                  {/* Metadata row */}
+                  <div className="flex items-center gap-3 mt-1 text-xs text-white/40 font-medium">
+                    {/* Mock rating */}
+                    <span className="bg-white/10 px-1.5 py-0.5 rounded text-white/60">U/A 16+</span>
+                    
+                    {episode.runtime && (
+                      <span className="flex items-center gap-1">
+                        {episode.runtime}min
+                      </span>
+                    )}
+                    
+                    {episode.air_date && (
+                      <span>
+                        {new Date(episode.air_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         );

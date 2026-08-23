@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
+import { groupCache } from '../api/anilistGroups';
 import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
 import WatchPlayer from '../components/WatchPlayer';
 import SeasonSelector from '../components/SeasonSelector';
@@ -37,6 +38,7 @@ export default function WatchPage({ type }: WatchPageProps) {
             if (details) {
               details.source = 'anilist';
               details.media_type = 'anime';
+              details.animeGroup = groupCache.get(parseInt(id));
             }
           } else {
             details = await fetchDetails(parseInt(id), type);
@@ -219,8 +221,10 @@ export default function WatchPage({ type }: WatchPageProps) {
     setEpisodeNumber(newEpisode);
   };
 
+  const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1) || (type === 'anime' && data?.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1));
+
   return (
-    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
       {/* Top Nav (Minimal) */}
       <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
@@ -240,11 +244,12 @@ export default function WatchPage({ type }: WatchPageProps) {
           seasonNumber={(type === 'tv' || type === 'anime') ? seasonNumber : undefined}
           episodeNumber={(type === 'tv' || type === 'anime') ? episodeNumber : undefined}
           seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
+          forceFullScreen={!showBottomSection}
         />
       </div>
 
       {/* Details & Episode Selection Area */}
-      {((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1)) && (
+      {showBottomSection && (
         <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
           <div className="mt-2">
             {/* Season Selector */}
@@ -255,6 +260,25 @@ export default function WatchPage({ type }: WatchPageProps) {
                   currentSeason={seasonNumber}
                   onSeasonChange={handleSeasonChange}
                 />
+              </div>
+            )}
+            
+            {type === 'anime' && data.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1 && (
+              <div className="mb-8 flex flex-col gap-2">
+                
+                <div>
+                  <SeasonSelector 
+                    seasons={data.animeGroup.seasons.map((s: any) => ({
+                      id: s.anilistId,
+                      season_number: s.anilistId,
+                      name: s.displayTitle
+                    }))} 
+                    currentSeason={parseInt(id || "0")}
+                    onSeasonChange={(newId) => {
+                       navigate(`/anime/${newId}`, { replace: true });
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -268,6 +292,7 @@ export default function WatchPage({ type }: WatchPageProps) {
               episodes={seasonData.episodes || []} 
               currentEpisode={episodeNumber}
               onEpisodeSelect={handleEpisodeChange}
+              isAnime={type === 'anime'}
             />
           </div>
         </div>
