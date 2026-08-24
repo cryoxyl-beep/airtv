@@ -1,16 +1,14 @@
-import React, { useEffect, useState, useRef } from 'react';
+const fs = require('fs');
+
+const fullCode = `import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
-import { groupCache } from '../api/anilistGroups';
 import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
-import { getAnimeSeasonPreference, setAnimeSeasonPreference } from '../utils/preferences';
-import WatchPageContent from '../components/WatchPage';
-import EpisodeOverlay from '../components/EpisodeOverlay';
-import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl } from '../utils/providers';
+import WatchPlayer from '../components/WatchPlayer';
 import SeasonSelector from '../components/SeasonSelector';
 import EpisodeList from '../components/EpisodeList';
 import { ArrowLeft } from 'lucide-react';
-import WatchPageSkeleton from '../components/WatchPageSkeleton';
+import WatchPlayerSkeleton from '../components/WatchPlayerSkeleton';
 
 interface WatchPageProps {
   type: 'movie' | 'tv' | 'anime';
@@ -26,14 +24,11 @@ export default function WatchPage({ type }: WatchPageProps) {
   const [error, setError] = useState(false);
   const [seasonNumber, setSeasonNumber] = useState(1);
   const [episodeNumber, setEpisodeNumber] = useState(1);
-  const [isProviderActive, setIsProviderActive] = useState(false);
-  const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
 
   useEffect(() => {
     const loadContent = async () => {
       setLoading(true);
       setError(false);
-      let isRedirecting = false;
       try {
         if (!id) throw new Error('No ID');
         
@@ -44,27 +39,13 @@ export default function WatchPage({ type }: WatchPageProps) {
             if (details) {
               details.source = 'anilist';
               details.media_type = 'anime';
-              const group = groupCache.get(parseInt(id));
-              details.animeGroup = group;
-              
-              if (group) {
-                 const prefId = getAnimeSeasonPreference(group.groupId);
-                 if (prefId && prefId !== parseInt(id)) {
-                    const exists = group.seasons.find((s: any) => s.anilistId === prefId);
-                    if (exists) {
-                       isRedirecting = true;
-                       navigate(`/anime/${prefId}`, { replace: true });
-                       return;
-                    }
-                 }
-              }
             }
           } else {
             details = await fetchDetails(parseInt(id), type);
           }
         } catch (e: any) {
           console.error("fetchDetails failed:", e);
-          throw new Error(`Details fetch failed: ${e.message}`);
+          throw new Error(\`Details fetch failed: \${e.message}\`);
         }
         
         setData(details);
@@ -72,56 +53,42 @@ export default function WatchPage({ type }: WatchPageProps) {
         // 2. If TV show, fetch specific season details
         if (type === 'anime') {
           // Construct base episodes from AniList count
-          // Construct base episodes from AniList count
           const numEpisodes = details.number_of_episodes || 1;
-          const streamingEps = details.anilist_raw?.streamingEpisodes || [];
-          
-          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => {
-            const epNum = i + 1;
-            // Try to find a matching streaming episode to extract the title
-            // Usually titles are like "Episode 1 - Title" or "1 - Title"
-            let epName = `Episode ${epNum}`;
-            let epThumb = null;
-            
-            const match = streamingEps.find((se: any) => {
-              return se.title?.includes(`Episode ${epNum}`) || se.title?.startsWith(`${epNum} -`);
-            });
-            
-            if (match) {
-              const parts = match.title.split('-');
-              if (parts.length > 1) {
-                epName = parts.slice(1).join('-').trim();
-              } else {
-                epName = match.title;
-              }
-              epThumb = match.thumbnail;
-            }
-            
-            return {
-              episode_number: epNum,
-              name: epName,
-              overview: '',
-              still_path: epThumb
-            };
-          });
+          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => ({
+            episode_number: i + 1,
+            name: \`Episode \${i + 1}\`,
+            overview: '',
+            still_path: null
+          }));
           
           let mergedEpisodes = [...anilistEpisodes];
           
-          if (details.tmdb_id && details.tmdb_type !== 'movie') {
+          if (details.tmdb_id && details.anime_format !== 'movie') {
             try {
               // Fribb gives us the exact TMDB season mapping
               const targetSeason = details.tmdb_season || 1;
               const tmdbSeasonData = await fetchTVSeason(details.tmdb_id, targetSeason);
               
               if (tmdbSeasonData && tmdbSeasonData.episodes) {
-                // Merge ONLY TMDB thumbnails into our AniList episodes
+                // Merge TMDB thumbnails and names into our AniList episodes
                 mergedEpisodes = mergedEpisodes.map(ep => {
                   const tmdbEp = tmdbSeasonData.episodes.find((t: any) => t.episode_number === ep.episode_number);
                   return {
                     ...ep,
-                    still_path: tmdbEp?.still_path || ep.still_path
+                    name: tmdbEp?.name && tmdbEp.name !== \`Episode \${ep.episode_number}\` ? tmdbEp.name : ep.name,
+                    overview: tmdbEp?.overview || ep.overview,
+                    still_path: tmdbEp?.still_path || null
                   };
                 });
+                
+                // If TMDB has more episodes than AniList knows about, append them
+                tmdbSeasonData.episodes.forEach((tmdbEp: any) => {
+                  if (!mergedEpisodes.find(ep => ep.episode_number === tmdbEp.episode_number)) {
+                    mergedEpisodes.push(tmdbEp);
+                  }
+                });
+                // Sort to ensure order
+                mergedEpisodes.sort((a, b) => a.episode_number - b.episode_number);
               }
             } catch (e) {
               console.warn("Failed to fetch TMDB season data for anime", e);
@@ -156,9 +123,7 @@ export default function WatchPage({ type }: WatchPageProps) {
         console.error("Failed to load watch data:", err.message || err);
         setError(true);
       } finally {
-        if (!isRedirecting) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
@@ -182,7 +147,7 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+      <div className={\`min-h-screen bg-[#0b0b0b] font-sans text-white \${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}\`}>
         {/* Top Nav Placeholder */}
         <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
           <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
@@ -190,7 +155,7 @@ export default function WatchPage({ type }: WatchPageProps) {
 
         {/* Player Skeleton */}
         <div className="w-full relative bg-black pt-0 lg:pt-0">
-          <WatchPageSkeleton type={type === 'anime' ? 'tv' : type} />
+          <WatchPlayerSkeleton type={type} />
         </div>
 
         {/* TV Specific Sections Skeleton */}
@@ -226,11 +191,6 @@ export default function WatchPage({ type }: WatchPageProps) {
   }
 
   const handleBack = () => {
-    if (isProviderActive) {
-      setIsProviderActive(false);
-      setShowEpisodeOverlay(false);
-      return;
-    }
     if (window.history.length > 1) {
       navigate(-1);
     } else {
@@ -247,23 +207,8 @@ export default function WatchPage({ type }: WatchPageProps) {
     setEpisodeNumber(newEpisode);
   };
 
-  
-  let providerUrl: string | null = null;
-  if (data) {
-    if (type === 'movie') {
-      providerUrl = buildMovieProviderUrl('vidnest', data.id);
-    } else if (type === 'tv') {
-      providerUrl = buildSeriesProviderUrl('vidnest', data.id, seasonNumber, episodeNumber);
-    } else if (type === 'anime') {
-      const malId = data.mal_id || data.idmal || data.id_mal;
-      providerUrl = buildAnimeProviderUrl('vidnest', data.id, malId, episodeNumber, 'sub');
-    }
-  }
-
-  const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1) || (type === 'anime' && data?.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1));
-
   return (
-    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
+    <div className={\`min-h-screen bg-[#0b0b0b] font-sans text-white \${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}\`}>
       {/* Top Nav (Minimal) */}
       <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
@@ -277,39 +222,17 @@ export default function WatchPage({ type }: WatchPageProps) {
 
       {/* Main Video Area */}
       <div className="w-full relative bg-black pt-0 lg:pt-0">
-        <WatchPageContent 
+        <WatchPlayer 
           item={data} 
           type={type} 
           seasonNumber={(type === 'tv' || type === 'anime') ? seasonNumber : undefined}
           episodeNumber={(type === 'tv' || type === 'anime') ? episodeNumber : undefined}
           seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
-          forceFullScreen={!showBottomSection}
-          onPlay={() => setIsProviderActive(true)}
-          isProviderActive={isProviderActive}
-          providerIframeUrl={providerUrl}
-          onToggleEpisodes={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
         />
       </div>
 
-      {isProviderActive && showBottomSection && showEpisodeOverlay && (
-        <EpisodeOverlay 
-          type={type as any}
-          data={data}
-          seasonData={seasonData}
-          currentSeason={seasonNumber}
-          currentEpisode={episodeNumber}
-          onSeasonChange={handleSeasonChange}
-          onEpisodeSelect={(ep) => {
-            handleEpisodeChange(ep);
-            setShowEpisodeOverlay(false);
-          }}
-          id={id}
-          onClose={() => setShowEpisodeOverlay(false)}
-        />
-      )}
-      
       {/* Details & Episode Selection Area */}
-      {showBottomSection && (
+      {((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1)) && (
         <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
           <div className="mt-2">
             {/* Season Selector */}
@@ -320,26 +243,6 @@ export default function WatchPage({ type }: WatchPageProps) {
                   currentSeason={seasonNumber}
                   onSeasonChange={handleSeasonChange}
                 />
-              </div>
-            )}
-            
-            {type === 'anime' && data.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1 && (
-              <div className="mb-8 flex flex-col gap-2">
-                
-                <div>
-                  <SeasonSelector 
-                    seasons={data.animeGroup.seasons.map((s: any) => ({
-                      id: s.anilistId,
-                      season_number: s.anilistId,
-                      name: s.displayTitle
-                    }))} 
-                    currentSeason={parseInt(id || "0")}
-                    onSeasonChange={(newId) => {
-                       setAnimeSeasonPreference(data.animeGroup.groupId, newId);
-                       navigate(`/anime/${newId}`, { replace: true });
-                    }}
-                  />
-                </div>
               </div>
             )}
 
@@ -353,7 +256,6 @@ export default function WatchPage({ type }: WatchPageProps) {
               episodes={seasonData.episodes || []} 
               currentEpisode={episodeNumber}
               onEpisodeSelect={handleEpisodeChange}
-              isAnime={type === 'anime'}
             />
           </div>
         </div>
@@ -361,3 +263,5 @@ export default function WatchPage({ type }: WatchPageProps) {
     </div>
   );
 }
+`;
+fs.writeFileSync('src/pages/WatchPage.tsx', fullCode, 'utf8');

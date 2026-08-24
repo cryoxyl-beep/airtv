@@ -22,5 +22,6 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["update_styles.cjs", "**/*.cjs", "**/*.mjs"]
 }
