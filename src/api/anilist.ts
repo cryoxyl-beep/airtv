@@ -3,7 +3,9 @@ import { buildAnimeGroup, nodeCache, groupCache } from './anilistGroups';
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
 
-const fetchAniList = async (query: string, variables: any = {}) => {
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const fetchAniList = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
   const options = {
     method: 'POST',
     headers: {
@@ -15,11 +17,25 @@ const fetchAniList = async (query: string, variables: any = {}) => {
       variables
     })
   };
-  const response = await fetch(ANILIST_API_URL, options);
-  if (!response.ok) {
-    throw new Error('AniList API error');
+  
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(ANILIST_API_URL, options);
+      if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfter = response.headers.get('Retry-After');
+          const delay = retryAfter ? parseInt(retryAfter) * 1000 : (i + 1) * 1000;
+          await sleep(delay);
+          continue;
+        }
+        throw new Error('AniList API error: ' + response.status);
+      }
+      return await response.json();
+    } catch (e: any) {
+      if (i === retries - 1) throw e;
+      await sleep((i + 1) * 1000);
+    }
   }
-  return response.json();
 };
 
 const normalizeAniListToTmdb = async (media: any): Promise<any> => {
@@ -360,7 +376,7 @@ export const searchAnime = async (search: string, perPage = 20) => {
   const query = `
     query ($search: String, $perPage: Int) {
       Page (page: 1, perPage: $perPage) {
-        media (type: ANIME, search: $search, sort: POPULARITY_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
+        media (type: ANIME, search: $search, sort: POPULARITY_DESC, isAdult: false) {
           id
           title { romaji english native }
           description
@@ -419,7 +435,7 @@ export const searchAnime = async (search: string, perPage = 20) => {
   try {
     const data = await fetchAniList(query, { search, perPage });
     const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
-    return { results: await deduplicateAnimeList(results.filter(Boolean)) };
+    return { results: results.filter(Boolean) };
   } catch (e) {
     console.error(`searchAnime failed for ${search}:`, e);
     return { results: [] };

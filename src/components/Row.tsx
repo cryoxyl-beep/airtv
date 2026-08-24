@@ -44,7 +44,7 @@ const unobserveElement = (element: Element) => {
   getGlobalObserver()?.unobserve(element);
 };
 
-export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> = ({ item, isTop10 = false, index }) => {
+export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false }) => {
   const initialLogo = getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
   const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
@@ -98,7 +98,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number }> 
     <div
       ref={cardRef}
       className={`relative z-10 flex-shrink-0 cursor-pointer flex items-center group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110 ${
-        isTop10 ? 'gap-2 md:gap-4' : 'w-[300px] md:w-[400px] lg:w-[450px]'
+        isTop10 ? 'gap-2 md:gap-4' : isGridCard ? 'w-full' : 'w-[300px] md:w-[400px] lg:w-[450px]'
       }`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}

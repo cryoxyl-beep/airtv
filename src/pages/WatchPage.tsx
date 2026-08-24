@@ -1,14 +1,19 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { fetchDetails, fetchTVSeason } from '../api/tmdb';
 import { fetchAnimeDetails } from '../api/anilist';
-import { groupCache } from '../api/anilistGroups';
-import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
 import { getAnimeSeasonPreference, setAnimeSeasonPreference } from '../utils/preferences';
-import WatchPlayer from '../components/WatchPlayer';
+import { 
+  getMovieProviderUrl, 
+  getSeriesProviderUrl, 
+  getAnimeProviderUrl, 
+  MovieProvider, 
+  SeriesProvider, 
+  AnimeProvider 
+} from '../utils/providers';
 import SeasonSelector from '../components/SeasonSelector';
-import EpisodeList from '../components/EpisodeList';
-import { ArrowLeft } from 'lucide-react';
-import WatchPlayerSkeleton from '../components/WatchPlayerSkeleton';
+import EpisodePanel from '../components/EpisodePanel';
+import { ArrowLeft, ListVideo, Settings2 } from 'lucide-react';
 
 interface WatchPageProps {
   type: 'movie' | 'tv' | 'anime';
@@ -22,78 +27,47 @@ export default function WatchPage({ type }: WatchPageProps) {
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [seasonNumber, setSeasonNumber] = useState(1);
-  const [episodeNumber, setEpisodeNumber] = useState(1);
+  
+  const [seasonNumber, setSeasonNumber] = useState<number>(1);
+  const [episodeNumber, setEpisodeNumber] = useState<number>(1);
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  
+  // Provider Selection State
+  const [movieProvider, setMovieProvider] = useState<MovieProvider>('vidnest');
+  const [seriesProvider, setSeriesProvider] = useState<SeriesProvider>('vidnest');
+  const [animeProvider, setAnimeProvider] = useState<AnimeProvider>('vidnest');
+  const [audioLanguage, setAudioLanguage] = useState<'sub' | 'dub'>('sub');
+  
+  const [showProviderMenu, setShowProviderMenu] = useState(false);
 
   useEffect(() => {
+    let isRedirecting = false;
     const loadContent = async () => {
+      if (!id) return;
       setLoading(true);
-      setError(false);
-      let isRedirecting = false;
       try {
-        if (!id) throw new Error('No ID');
-        
-        let details;
-        try {
-          if (type === 'anime') {
-            details = await fetchAnimeDetails(parseInt(id));
-            if (details) {
-              details.source = 'anilist';
-              details.media_type = 'anime';
-              const group = groupCache.get(parseInt(id));
-              details.animeGroup = group;
-              
-              if (group) {
-                 const prefId = getAnimeSeasonPreference(group.groupId);
-                 if (prefId && prefId !== parseInt(id)) {
-                    const exists = group.seasons.find((s: any) => s.anilistId === prefId);
-                    if (exists) {
-                       isRedirecting = true;
-                       navigate(`/anime/${prefId}`, { replace: true });
-                       return;
-                    }
-                 }
-              }
-            }
-          } else {
-            details = await fetchDetails(parseInt(id), type);
-          }
-        } catch (e: any) {
-          console.error("fetchDetails failed:", e);
-          throw new Error(`Details fetch failed: ${e.message}`);
-        }
-        
-        setData(details);
-
-        // 2. If TV show, fetch specific season details
-        if (type === 'anime') {
-          // Construct base episodes from AniList count
-          // Construct base episodes from AniList count
-          const numEpisodes = details.number_of_episodes || 1;
-          const streamingEps = details.anilist_raw?.streamingEpisodes || [];
+        if (type === 'movie') {
+          const details = await fetchDetails(parseInt(id), 'movie');
+          setData(details);
+        } else if (type === 'anime') {
+          const details = await fetchAnimeDetails(parseInt(id));
+          setData(details);
           
-          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => {
-            const epNum = i + 1;
-            // Try to find a matching streaming episode to extract the title
-            // Usually titles are like "Episode 1 - Title" or "1 - Title"
-            let epName = `Episode ${epNum}`;
-            let epThumb = null;
-            
-            const match = streamingEps.find((se: any) => {
-              return se.title?.includes(`Episode ${epNum}`) || se.title?.startsWith(`${epNum} -`);
-            });
-            
-            if (match) {
-              const parts = match.title.split('-');
-              if (parts.length > 1) {
-                epName = parts.slice(1).join('-').trim();
-              } else {
-                epName = match.title;
-              }
-              epThumb = match.thumbnail;
+          if (details.animeGroup?.groupId) {
+            const prefSeason = getAnimeSeasonPreference(details.animeGroup.groupId);
+            if (prefSeason && prefSeason !== parseInt(id)) {
+              isRedirecting = true;
+              navigate(`/anime/${prefSeason}`, { replace: true });
+              return;
             }
-            
+          }
+          
+          let anilistEpisodes = (details.episodes || []).map((ep: any) => {
+            const epNum = ep.number;
+            const epName = ep.title?.english || ep.title?.romaji || `Episode ${epNum}`;
+            const epThumb = ep.image;
             return {
+              id: ep.id || epNum,
               episode_number: epNum,
               name: epName,
               overview: '',
@@ -105,17 +79,16 @@ export default function WatchPage({ type }: WatchPageProps) {
           
           if (details.tmdb_id && details.tmdb_type !== 'movie') {
             try {
-              // Fribb gives us the exact TMDB season mapping
               const targetSeason = details.tmdb_season || 1;
               const tmdbSeasonData = await fetchTVSeason(details.tmdb_id, targetSeason);
               
               if (tmdbSeasonData && tmdbSeasonData.episodes) {
-                // Merge ONLY TMDB thumbnails into our AniList episodes
                 mergedEpisodes = mergedEpisodes.map(ep => {
                   const tmdbEp = tmdbSeasonData.episodes.find((t: any) => t.episode_number === ep.episode_number);
                   return {
                     ...ep,
-                    still_path: tmdbEp?.still_path || ep.still_path
+                    still_path: tmdbEp?.still_path || ep.still_path,
+                    runtime: tmdbEp?.runtime || ep.runtime
                   };
                 });
               }
@@ -125,17 +98,17 @@ export default function WatchPage({ type }: WatchPageProps) {
           }
           
           setSeasonData({ episodes: mergedEpisodes });
-          // Force seasonNumber to 1 to hide season selector logic if it's based on it
           setSeasonNumber(1);
           
         } else if (type === 'tv') {
-          // Check if requested season exists
+          const details = await fetchDetails(parseInt(id), 'tv');
+          setData(details);
+          
           const seasons = details.seasons || [];
           let targetSeason = seasonNumber;
           const seasonExists = seasons.find((s: any) => s.season_number === targetSeason);
           
           if (!seasonExists && seasons.length > 0) {
-            // Default to the first valid season (prefer > 0)
             const validSeason = seasons.find((s: any) => s.season_number > 0) || seasons[0];
             targetSeason = validSeason.season_number;
             setSeasonNumber(targetSeason);
@@ -157,11 +130,10 @@ export default function WatchPage({ type }: WatchPageProps) {
         }
       }
     };
-
+    
     loadContent();
   }, [id, type]);
 
-  // Load season data when seasonNumber state changes, but don't reload everything
   useEffect(() => {
     if (type === 'tv' && id && !loading && data) {
       const loadSeason = async () => {
@@ -176,33 +148,28 @@ export default function WatchPage({ type }: WatchPageProps) {
     }
   }, [seasonNumber, id, type]);
 
+  // Window message listener for basic player events if provider supports postMessage
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (msg && msg.event === 'paused') {
+          setIsPanelOpen(true);
+        } else if (msg && (msg.event === 'playing' || msg.event === 'play')) {
+          setIsPanelOpen(false);
+        }
+      } catch (e) {
+        // Not JSON or unhandled
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   if (loading) {
     return (
-      <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
-        {/* Top Nav Placeholder */}
-        <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
-          <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
-        </div>
-
-        {/* Player Skeleton */}
-        <div className="w-full relative bg-black pt-0 lg:pt-0">
-          <WatchPlayerSkeleton type={type === 'anime' ? 'tv' : type} />
-        </div>
-
-        {/* TV Specific Sections Skeleton */}
-        {(type === 'tv' || type === 'anime') && (
-          <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
-            <div className="mt-2">
-              <div className="mb-8 w-48 h-10 bg-white/10 rounded-md animate-pulse" />
-              <div className="w-24 h-6 bg-white/10 rounded animate-pulse mb-6" />
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-                {[...Array(10)].map((_, i) => (
-                  <div key={i} className="aspect-video bg-white/5 rounded-md animate-pulse" />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+      <div className="min-h-screen bg-[#0b0b0b] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
       </div>
     );
   }
@@ -232,88 +199,159 @@ export default function WatchPage({ type }: WatchPageProps) {
   const handleSeasonChange = (newSeason: number) => {
     setSeasonNumber(newSeason);
     setEpisodeNumber(1);
+    if (type === 'anime' && data?.animeGroup?.groupId) {
+      setAnimeSeasonPreference(data.animeGroup.groupId, newSeason);
+      navigate(`/anime/${newSeason}`, { replace: true });
+    }
   };
 
   const handleEpisodeChange = (newEpisode: number) => {
     setEpisodeNumber(newEpisode);
   };
 
-  const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1) || (type === 'anime' && data?.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1));
+  let providerUrl = '';
+  if (type === 'movie') {
+    providerUrl = getMovieProviderUrl(id as string, movieProvider);
+  } else if (type === 'tv') {
+    providerUrl = getSeriesProviderUrl(id as string, seasonNumber, episodeNumber, seriesProvider);
+  } else if (type === 'anime') {
+    providerUrl = getAnimeProviderUrl(id as string, episodeNumber, animeProvider, audioLanguage, data?.idMal);
+  }
+
+  const hasEpisodes = type === 'tv' || type === 'anime';
 
   return (
-    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
-      {/* Top Nav (Minimal) */}
-      <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
+    <div className="w-screen h-screen bg-black overflow-hidden flex flex-col relative font-sans text-white">
+      {/* Top Nav */}
+      <div className="absolute top-0 left-0 right-0 p-6 z-50 flex items-start justify-between pointer-events-none">
+        
+        {/* Back Button */}
         <button 
           onClick={handleBack}
-          className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
+          className="pointer-events-auto w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
           aria-label="Go Back"
         >
           <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
         </button>
+
+        {/* Provider Settings */}
+        <div className="relative pointer-events-auto">
+          <button 
+            onClick={() => setShowProviderMenu(!showProviderMenu)}
+            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all"
+            aria-label="Settings"
+          >
+            <Settings2 size={20} className="text-white/80" />
+          </button>
+          
+          {showProviderMenu && (
+            <div className="absolute top-full right-0 mt-3 w-64 bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8)] p-4 flex flex-col gap-4 z-50">
+              <h3 className="text-sm font-semibold text-white/50 uppercase tracking-wider">Server Selection</h3>
+              
+              {type === 'movie' && (
+                <div className="flex flex-col gap-2">
+                  {(['vidnest', 'cinesrc', 'vidfast', 'movies111'] as MovieProvider[]).map(p => (
+                    <button 
+                      key={p} 
+                      onClick={() => { setMovieProvider(p); setShowProviderMenu(false); }}
+                      className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${movieProvider === p ? 'bg-white text-black' : 'hover:bg-white/10 text-white/80'}`}
+                    >
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {type === 'tv' && (
+                <div className="flex flex-col gap-2">
+                  {(['vidnest', 'cinesrc', 'vidfast', 'movies111'] as SeriesProvider[]).map(p => (
+                    <button 
+                      key={p} 
+                      onClick={() => { setSeriesProvider(p); setShowProviderMenu(false); }}
+                      className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${seriesProvider === p ? 'bg-white text-black' : 'hover:bg-white/10 text-white/80'}`}
+                    >
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {type === 'anime' && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    <h4 className="text-xs text-white/40 mb-1">Server</h4>
+                    {(['vidnest', 'origami', 'animepahe'] as AnimeProvider[]).map(p => (
+                      <button 
+                        key={p} 
+                        onClick={() => { setAnimeProvider(p); setShowProviderMenu(false); }}
+                        className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${animeProvider === p ? 'bg-white text-black' : 'hover:bg-white/10 text-white/80'}`}
+                      >
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2 pt-3 border-t border-white/10">
+                    <h4 className="text-xs text-white/40 mb-1">Audio</h4>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => { setAudioLanguage('sub'); setShowProviderMenu(false); }}
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors ${audioLanguage === 'sub' ? 'bg-white text-black' : 'bg-white/5 hover:bg-white/10 text-white/80'}`}
+                      >
+                        Sub
+                      </button>
+                      <button 
+                        onClick={() => { setAudioLanguage('dub'); setShowProviderMenu(false); }}
+                        className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors ${audioLanguage === 'dub' ? 'bg-white text-black' : 'bg-white/5 hover:bg-white/10 text-white/80'}`}
+                      >
+                        Dub
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Video Area */}
-      <div className="w-full relative bg-black pt-0 lg:pt-0">
-        <WatchPlayer 
-          item={data} 
-          type={type} 
-          seasonNumber={(type === 'tv' || type === 'anime') ? seasonNumber : undefined}
-          episodeNumber={(type === 'tv' || type === 'anime') ? episodeNumber : undefined}
-          seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
-          forceFullScreen={!showBottomSection}
+      <div className="flex-1 w-full relative bg-black">
+        <iframe
+          src={providerUrl}
+          className="w-full h-full border-none outline-none bg-black"
+          allowFullScreen
+          allow="autoplay; encrypted-media"
+          title="Video Player"
         />
+        
+        {/* Manual Episode Toggle Overlay Button */}
+        {hasEpisodes && (
+          <div className="absolute bottom-6 right-6 z-40">
+            <button 
+              onClick={() => setIsPanelOpen(!isPanelOpen)}
+              className="flex items-center gap-2 bg-[#1A1A1A]/90 hover:bg-[#252525] border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md text-white px-5 py-3 rounded-full font-semibold transition-all hover:scale-105"
+            >
+              <ListVideo size={20} />
+              <span className="hidden sm:inline">Episodes</span>
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Details & Episode Selection Area */}
-      {showBottomSection && (
-        <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
-          <div className="mt-2">
-            {/* Season Selector */}
-            {type === 'tv' && data.seasons && (
-              <div className="mb-8">
-                <SeasonSelector 
-                  seasons={data.seasons.filter((s: any) => s.season_number > 0)} 
-                  currentSeason={seasonNumber}
-                  onSeasonChange={handleSeasonChange}
-                />
-              </div>
-            )}
-            
-            {type === 'anime' && data.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1 && (
-              <div className="mb-8 flex flex-col gap-2">
-                
-                <div>
-                  <SeasonSelector 
-                    seasons={data.animeGroup.seasons.map((s: any) => ({
-                      id: s.anilistId,
-                      season_number: s.anilistId,
-                      name: s.displayTitle
-                    }))} 
-                    currentSeason={parseInt(id || "0")}
-                    onSeasonChange={(newId) => {
-                       setAnimeSeasonPreference(data.animeGroup.groupId, newId);
-                       navigate(`/anime/${newId}`, { replace: true });
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Episode Count */}
-            <div className="text-white/60 mb-6 font-medium text-lg">
-              {seasonData.episodes?.length || 0} Episodes
-            </div>
-
-            {/* Episode Grid */}
-            <EpisodeList 
-              episodes={seasonData.episodes || []} 
-              currentEpisode={episodeNumber}
-              onEpisodeSelect={handleEpisodeChange}
-              isAnime={type === 'anime'}
-            />
-          </div>
-        </div>
+      {/* Episode Panel Drawer/Overlay */}
+      {hasEpisodes && (
+        <EpisodePanel
+          isOpen={isPanelOpen}
+          onClose={() => setIsPanelOpen(false)}
+          type={type}
+          data={data}
+          seasonData={seasonData}
+          seasonNumber={seasonNumber}
+          episodeNumber={episodeNumber}
+          onSeasonChange={handleSeasonChange}
+          onEpisodeChange={handleEpisodeChange}
+          isAnime={type === 'anime'}
+        />
       )}
     </div>
   );
