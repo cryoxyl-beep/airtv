@@ -17,17 +17,21 @@ interface WatchPageProps {
 }
 
 export default function WatchPage({ type }: WatchPageProps) {
-  const { id } = useParams();
+  const { id, season, episode } = useParams();
   const navigate = useNavigate();
   
   const [data, setData] = useState<any>(null);
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [seasonNumber, setSeasonNumber] = useState(1);
-  const [episodeNumber, setEpisodeNumber] = useState(1);
+  // Derived directly from the route, no React state
+  const activeSeason = season ? parseInt(season, 10) : 1;
+  const activeEpisode = episode ? parseInt(episode, 10) : 1;
   const [isProviderActive, setIsProviderActive] = useState(false);
   const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
+
+  
+
 
   useEffect(() => {
     const loadContent = async () => {
@@ -47,7 +51,7 @@ export default function WatchPage({ type }: WatchPageProps) {
               const group = groupCache.get(parseInt(id));
               details.animeGroup = group;
               
-              if (group) {
+              if (group && !episode) {
                  const prefId = getAnimeSeasonPreference(group.groupId);
                  if (prefId && prefId !== parseInt(id)) {
                     const exists = group.seasons.find((s: any) => s.anilistId === prefId);
@@ -74,37 +78,46 @@ export default function WatchPage({ type }: WatchPageProps) {
           // Construct base episodes from AniList count
           // Construct base episodes from AniList count
           const numEpisodes = details.number_of_episodes || 1;
+          
           const streamingEps = details.anilist_raw?.streamingEpisodes || [];
           
-          const anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => {
-            const epNum = i + 1;
-            // Try to find a matching streaming episode to extract the title
-            // Usually titles are like "Episode 1 - Title" or "1 - Title"
-            let epName = `Episode ${epNum}`;
-            let epThumb = null;
-            
-            const match = streamingEps.find((se: any) => {
-              return se.title?.includes(`Episode ${epNum}`) || se.title?.startsWith(`${epNum} -`);
-            });
-            
-            if (match) {
-              const parts = match.title.split('-');
-              if (parts.length > 1) {
-                epName = parts.slice(1).join('-').trim();
-              } else {
-                epName = match.title;
+          let anilistEpisodes = [];
+          if (streamingEps.length > 0) {
+            anilistEpisodes = streamingEps.map((se, i) => {
+              let epNum = i + 1;
+              const match = se.title?.match(/Episode\s+(\d+)|^\s*(\d+)\s*-/i);
+              if (match) {
+                epNum = parseInt(match[1] || match[2], 10);
               }
-              epThumb = match.thumbnail;
-            }
-            
-            return {
-              episode_number: epNum,
-              name: epName,
+              
+              let epName = `Episode ${epNum}`;
+              if (se.title) {
+                const parts = se.title.split('-');
+                if (parts.length > 1) {
+                  epName = parts.slice(1).join('-').trim();
+                } else {
+                  epName = se.title;
+                }
+              }
+              
+              return {
+                episode_number: epNum,
+                name: epName,
+                overview: '',
+                still_path: se.thumbnail
+              };
+            });
+            // Ensure they are sorted
+            anilistEpisodes.sort((a, b) => a.episode_number - b.episode_number);
+          } else {
+            anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => ({
+              episode_number: i + 1,
+              name: `Episode ${i + 1}`,
               overview: '',
-              still_path: epThumb
-            };
-          });
-          
+              still_path: null
+            }));
+          }
+
           let mergedEpisodes = [...anilistEpisodes];
           
           if (details.tmdb_id && details.tmdb_type !== 'movie') {
@@ -129,21 +142,22 @@ export default function WatchPage({ type }: WatchPageProps) {
           }
           
           setSeasonData({ episodes: mergedEpisodes });
-          // Force seasonNumber to 1 to hide season selector logic if it's based on it
-          setSeasonNumber(1);
+          // Force activeSeason to 1 to hide season selector logic if it's based on it
+          
           
         } else if (type === 'tv') {
           // Check if requested season exists
           const seasons = details.seasons || [];
-          let targetSeason = seasonNumber;
+          let targetSeason = activeSeason;
           const seasonExists = seasons.find((s: any) => s.season_number === targetSeason);
           
           if (!seasonExists && seasons.length > 0) {
             // Default to the first valid season (prefer > 0)
             const validSeason = seasons.find((s: any) => s.season_number > 0) || seasons[0];
             targetSeason = validSeason.season_number;
-            setSeasonNumber(targetSeason);
-            setEpisodeNumber(1);
+            isRedirecting = true;
+            navigate(`/watch/tv/${id}/${targetSeason}/1`, { replace: true });
+            return;
           }
           try {
             const season = await fetchTVSeason(parseInt(id), targetSeason);
@@ -165,12 +179,12 @@ export default function WatchPage({ type }: WatchPageProps) {
     loadContent();
   }, [id, type]);
 
-  // Load season data when seasonNumber state changes, but don't reload everything
+  // Load season data when activeSeason state changes, but don't reload everything
   useEffect(() => {
     if (type === 'tv' && id && !loading && data) {
       const loadSeason = async () => {
         try {
-          const season = await fetchTVSeason(parseInt(id), seasonNumber);
+          const season = await fetchTVSeason(parseInt(id), activeSeason);
           setSeasonData(season);
         } catch (e: any) {
           console.error("fetchTVSeason failed:", e);
@@ -178,10 +192,10 @@ export default function WatchPage({ type }: WatchPageProps) {
       };
       loadSeason();
     }
-  }, [seasonNumber, id, type]);
+  }, [activeSeason, id, type]);
 
   if (loading) {
-    return (
+      return (
       <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
         {/* Top Nav Placeholder */}
         <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
@@ -239,24 +253,35 @@ export default function WatchPage({ type }: WatchPageProps) {
   };
 
   const handleSeasonChange = (newSeason: number) => {
-    setSeasonNumber(newSeason);
-    setEpisodeNumber(1);
+    if (type === 'tv') {
+      navigate(`/watch/tv/${id}/${newSeason}/1`, { replace: false });
+    } else {
+      
+      
+    }
   };
 
   const handleEpisodeChange = (newEpisode: number) => {
-    setEpisodeNumber(newEpisode);
+    if (type === 'tv') {
+      navigate(`/watch/tv/${id}/${activeSeason}/${newEpisode}`, { replace: false });
+    } else if (type === 'anime') {
+      navigate(`/anime/${id}/${newEpisode}`, { replace: false });
+    } else {
+      
+    }
   };
 
   
   let providerUrl: string | null = null;
+
   if (data) {
     if (type === 'movie') {
       providerUrl = buildMovieProviderUrl('vidnest', data.id);
     } else if (type === 'tv') {
-      providerUrl = buildSeriesProviderUrl('vidnest', data.id, seasonNumber, episodeNumber);
+      providerUrl = buildSeriesProviderUrl('vidnest', data.id, activeSeason, activeEpisode);
     } else if (type === 'anime') {
       const malId = data.mal_id || data.idmal || data.id_mal;
-      providerUrl = buildAnimeProviderUrl('vidnest', data.id, malId, episodeNumber, 'sub');
+      providerUrl = buildAnimeProviderUrl('vidnest', data.id, malId, activeEpisode, 'sub');
     }
   }
 
@@ -280,8 +305,8 @@ export default function WatchPage({ type }: WatchPageProps) {
         <WatchPageContent 
           item={data} 
           type={type} 
-          seasonNumber={(type === 'tv' || type === 'anime') ? seasonNumber : undefined}
-          episodeNumber={(type === 'tv' || type === 'anime') ? episodeNumber : undefined}
+          seasonNumber={(type === 'tv' || type === 'anime') ? activeSeason : undefined}
+          episodeNumber={(type === 'tv' || type === 'anime') ? activeEpisode : undefined}
           seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
           forceFullScreen={!showBottomSection}
           onPlay={() => setIsProviderActive(true)}
@@ -296,8 +321,8 @@ export default function WatchPage({ type }: WatchPageProps) {
           type={type as any}
           data={data}
           seasonData={seasonData}
-          currentSeason={seasonNumber}
-          currentEpisode={episodeNumber}
+          currentSeason={activeSeason}
+          currentEpisode={activeEpisode}
           onSeasonChange={handleSeasonChange}
           onEpisodeSelect={(ep) => {
             handleEpisodeChange(ep);
@@ -317,7 +342,7 @@ export default function WatchPage({ type }: WatchPageProps) {
               <div className="mb-8">
                 <SeasonSelector 
                   seasons={data.seasons.filter((s: any) => s.season_number > 0)} 
-                  currentSeason={seasonNumber}
+                  currentSeason={activeSeason}
                   onSeasonChange={handleSeasonChange}
                 />
               </div>
@@ -351,7 +376,7 @@ export default function WatchPage({ type }: WatchPageProps) {
             {/* Episode Grid */}
             <EpisodeList 
               episodes={seasonData.episodes || []} 
-              currentEpisode={episodeNumber}
+              currentEpisode={activeEpisode}
               onEpisodeSelect={handleEpisodeChange}
               isAnime={type === 'anime'}
             />

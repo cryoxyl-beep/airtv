@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo, fetchTrailer } from '../api/tmdb';
-import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX } from 'lucide-react';
+import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX, ListVideo } from 'lucide-react';
 import { getVideoMutedPreference, setVideoMutedPreference } from '../utils/preferences';
 
 interface WatchPageProps {
   onPlay?: () => void;
   isProviderActive?: boolean;
   providerIframeUrl?: string | null;
+  onToggleEpisodes?: () => void;
   item: any;
   type: 'movie' | 'tv' | 'anime';
   seasonNumber?: number;
@@ -15,7 +16,7 @@ interface WatchPageProps {
   forceFullScreen?: boolean;
 }
 
-export default function WatchPage({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen, onPlay, isProviderActive, providerIframeUrl, onToggleEpisodes }: WatchPageProps) {
+export default function WatchPage({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen, onPlay, isProviderActive, providerIframeUrl, onToggleEpisodes }: WatchPageProps) { console.log('WatchPageContent rendered with providerIframeUrl:', providerIframeUrl);
   const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   
@@ -148,6 +149,10 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       clearTimeout(playerInitTimer);
       if (cutoffTimerRef.current) clearTimeout(cutoffTimerRef.current);
       window.removeEventListener('message', handleMessage);
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+        iframeRef.current.src = 'about:blank';
+      }
     };
   }, [trailerKey]);
 
@@ -172,6 +177,21 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
     }
   }, [trailerPlaying, trailerEnded, resetInactivityTimer]);
+
+  
+  useEffect(() => {
+    if (isProviderActive) {
+      setTrailerEnded(true);
+      setTrailerPlaying(false);
+      isPlayingRef.current = false;
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
+      }
+    }
+  }, [isProviderActive]);
 
   const handleMouseMove = () => {
     if (trailerPlaying && !trailerEnded) {
@@ -210,7 +230,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       
       {/* Layer 0: YouTube Player */}
       <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
-        {trailerKey && !trailerEnded && (
+        {trailerKey && !trailerEnded && !isProviderActive && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
             <iframe
               ref={iframeRef}
@@ -344,6 +364,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       {isProviderActive && providerIframeUrl && (
         <div className="absolute inset-0 z-40 bg-black">
           <iframe
+            key={`iframe-${providerIframeUrl || 'provider'}`}
             src={providerIframeUrl}
             className="w-full h-full border-0"
             allow="autoplay; fullscreen"

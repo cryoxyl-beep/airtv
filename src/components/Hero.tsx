@@ -15,6 +15,7 @@ export default function Hero({ items }: HeroProps) {
   const [canShowTrailer, setCanShowTrailer] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const navigate = useNavigate();
+  const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (items && items[activeIndex]) {
@@ -93,6 +94,10 @@ export default function Hero({ items }: HeroProps) {
       isCurrent = false;
       clearTimeout(timer);
       window.removeEventListener('message', handleMessage);
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+        iframeRef.current.src = 'about:blank';
+      }
     };
   }, [activeIndex, items]);
 
@@ -144,6 +149,7 @@ export default function Hero({ items }: HeroProps) {
         {trailerKey && (
           <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-[1.15] pointer-events-none transition-opacity duration-700 ease-in-out will-change-opacity ${isTrailerVisible ? 'opacity-100' : 'opacity-0'}`}>
             <iframe
+              ref={iframeRef}
               id="hero-trailer-player"
               key={trailerKey}
               src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&loop=1&playlist=${trailerKey}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
