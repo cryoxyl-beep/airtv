@@ -70,7 +70,7 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b0b0b] font-sans pb-20 w-[100vw] overflow-x-hidden">
+    <div className="min-h-screen bg-black font-sans pb-20 w-[100vw] overflow-x-hidden">
       {/* Header */}
       <div className="relative pt-24 pb-8 px-6 md:px-12 z-20 flex flex-col items-center">
         <div className="absolute top-0 left-0 w-full p-6 z-50 flex items-center gap-4">

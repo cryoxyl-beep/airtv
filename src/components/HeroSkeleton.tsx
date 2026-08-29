@@ -2,12 +2,12 @@ import React from 'react';
 
 export default function HeroSkeleton() {
   return (
-    <div className="relative w-full min-h-[95vh] overflow-hidden bg-[#0b0b0b] flex flex-col justify-end pb-12 pt-32">
+    <div className="relative w-full min-h-[95vh] overflow-hidden bg-black flex flex-col justify-end pb-12 pt-32">
       <div className="absolute inset-0 bg-white/5 animate-pulse" />
       
       {/* Gradients */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0b] via-[#0b0b0b]/80 to-transparent w-full md:w-[65%] z-20 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/40 to-[#0b0b0b]/0 h-[60%] bottom-0 top-auto w-full z-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent w-full md:w-[65%] z-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/0 h-[60%] bottom-0 top-auto w-full z-20 pointer-events-none" />
 
       {/* Content Area */}
       <div className="relative w-full flex flex-col gap-6 z-30 mb-2">

@@ -3,43 +3,54 @@ export interface AnimeSeason {
   title: string;
   relationType?: string;
   isCurrent: boolean;
+  
+  // For compatibility with TMDB season selector
+  id: number;
+  name: string;
+  season_number: number;
 }
 
 export const extractAnimeSeasons = (rawMedia: any): AnimeSeason[] => {
   if (!rawMedia || !rawMedia.relations || !rawMedia.relations.edges) {
+    const title = rawMedia?.title?.english || rawMedia?.title?.romaji || "Season 1";
     return [{
       anilistId: rawMedia?.id,
-      title: rawMedia?.title?.english || rawMedia?.title?.romaji || "Season 1",
-      isCurrent: true
+      title: title,
+      isCurrent: true,
+      id: rawMedia?.id,
+      name: title,
+      season_number: rawMedia?.id
     }];
   }
 
-  // Find all prequels/sequels recursively? No, just immediate ones for simplicity, 
-  // or return the franchise. 
-  // To keep it simple, we just get immediate SEQUEL/PREQUEL/ALTERNATIVE.
   const seasons: AnimeSeason[] = [];
   
-  // Add current
+  const currentTitle = rawMedia.title?.english || rawMedia.title?.romaji || "Current Season";
   seasons.push({
     anilistId: rawMedia.id,
-    title: rawMedia.title?.english || rawMedia.title?.romaji || "Current Season",
-    isCurrent: true
+    title: currentTitle,
+    isCurrent: true,
+    id: rawMedia.id,
+    name: currentTitle,
+    season_number: rawMedia.id
   });
   
   for (const edge of rawMedia.relations.edges) {
     if ((edge.relationType === 'PREQUEL' || edge.relationType === 'SEQUEL' || edge.relationType === 'ALTERNATIVE' || edge.relationType === 'PARENT') && 
         edge.node.type === 'ANIME' && 
         (edge.node.format === 'TV' || edge.node.format === 'TV_SHORT' || edge.node.format === 'ONA' || edge.node.format === 'MOVIE')) {
+      const edgeTitle = edge.node.title?.english || edge.node.title?.romaji || `Related (${edge.relationType})`;
       seasons.push({
         anilistId: edge.node.id,
-        title: edge.node.title?.english || edge.node.title?.romaji || `Related (${edge.relationType})`,
+        title: edgeTitle,
         relationType: edge.relationType,
-        isCurrent: false
+        isCurrent: false,
+        id: edge.node.id,
+        name: edgeTitle,
+        season_number: edge.node.id
       });
     }
   }
   
-  // Sort them so Prequel -> Current -> Sequel (roughly)
-  // But wait, the user just wants the Season dropdown. This simple implementation works.
   return seasons;
 }

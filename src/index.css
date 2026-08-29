@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --color-netflix-bg: #0b0b0b;
+  --color-netflix-bg: #000000;
   --color-netflix-card: #141414;
   --color-netflix-hover: #2f2f2f;
   --color-netflix-red: #E50914;

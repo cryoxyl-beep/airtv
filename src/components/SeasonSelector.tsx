@@ -44,7 +44,7 @@ export default function SeasonSelector({ seasons, currentSeason, onSeasonChange 
         <div className="absolute top-full left-0 mt-3 w-72 max-h-80 overflow-y-auto bg-[#141414]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.8),_0_0_20px_rgba(255,255,255,0.05)] z-[100] py-2">
           {seasons.map((season) => (
             <button
-              key={season.id}
+              key={season.id || season.season_number}
               onClick={() => handleSelect(season.season_number)}
               className="w-full text-left px-5 py-3 flex items-center justify-between hover:bg-white/10 transition-colors group"
             >

@@ -30,41 +30,11 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         let details;
         if (type === 'anime') {
           details = await fetchAnimeDetails(parseInt(id));
-          if (details) {
-                        
-            // Generate basic episode array for anime if we don't have tmdb-like season format
-            const numEpisodes = details.number_of_episodes || 1;
-            const streamingEps = details.anilist_raw?.streamingEpisodes || [];
-            
-            let anilistEpisodes = [];
-            if (streamingEps.length > 0) {
-              anilistEpisodes = streamingEps.map((se: any, i: number) => {
-                let epNum = i + 1;
-                const match = se.title?.match(/Episode\s+(\d+)|^\s*(\d+)\s*-/i);
-                if (match) epNum = parseInt(match[1] || match[2], 10);
-                
-                let epName = `Episode ${epNum}`;
-                if (se.title) {
-                  const parts = se.title.split('-');
-                  if (parts.length > 1) epName = parts.slice(1).join('-').trim();
-                  else epName = se.title;
-                }
-                return {
-                  id: `ep-${epNum}`,
-                  episode_number: epNum,
-                  name: epName,
-                  still_path: se.thumbnail
-                };
-              });
-            } else {
-              anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => ({
-                id: `ep-${i + 1}`,
-                episode_number: i + 1,
-                name: `Episode ${i + 1}`,
-                still_path: details.backdrop_path || details.poster_path
-              }));
-            }
-            setSeasonData({ episodes: anilistEpisodes });
+                    if (details) {
+            const numEpisodes = details.number_of_episodes || 12;
+            const mergedEpisodes = await buildAnimeEpisodeList(parseInt(id), numEpisodes);
+            details.animeGroup = { seasons: extractAnimeSeasons(details.anilist_raw) };
+            setSeasonData({ episodes: mergedEpisodes });
           }
         } else {
           details = await fetchDetails(parseInt(id), type as 'movie' | 'tv');

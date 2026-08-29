@@ -68,7 +68,7 @@ export default function SearchPage() {
   }, [query, filter]);
 
   return (
-    <div className="min-h-screen bg-[#0b0b0b] pt-32 px-8 md:px-12 pb-20">
+    <div className="min-h-screen bg-black pt-32 px-8 md:px-12 pb-20">
       <div className="max-w-[1450px] mx-auto">
         
         <div className="mb-12 flex items-center gap-6">

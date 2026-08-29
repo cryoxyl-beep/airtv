@@ -141,11 +141,11 @@ export default function Hero({ items }: HeroProps) {
   const isTrailerVisible = canShowTrailer && trailerKey !== null;
 
   return (
-    <div className="relative w-full min-h-[95vh] overflow-hidden bg-[#0b0b0b] flex flex-col justify-end pb-12 pt-32">
+    <div className="relative w-full min-h-[95vh] overflow-hidden bg-black flex flex-col justify-end pb-12 pt-32">
 
       
       {/* Layer 0: YouTube Player */}
-      <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-[#0b0b0b]">
+      <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black">
         {trailerKey && (
           <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[100vw] h-[56.25vw] min-h-[100vh] min-w-[177.77vh] scale-[1.15] pointer-events-none transition-opacity duration-700 ease-in-out will-change-opacity ${isTrailerVisible ? 'opacity-100' : 'opacity-0'}`}>
             <iframe
@@ -178,8 +178,8 @@ export default function Hero({ items }: HeroProps) {
       </div>
 
       {/* Layer 2: Gradients */}
-      <div className="absolute inset-0 bg-gradient-to-r from-[#0b0b0b] via-[#0b0b0b]/80 to-transparent w-full md:w-[65%] z-20 pointer-events-none" />
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/40 to-[#0b0b0b]/0 h-[60%] bottom-0 top-auto w-full z-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-transparent w-full md:w-[65%] z-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/0 h-[60%] bottom-0 top-auto w-full z-20 pointer-events-none" />
 
       {/* Layer 3: Left Content Area */}
       <div className="relative w-full flex flex-col gap-6 z-30 mb-2">

@@ -1,5 +1,4 @@
 import React, { useRef, useEffect } from 'react';
-import SeasonSelector from './SeasonSelector';
 import { IMAGE_BASE_URL_W500 } from '../api/tmdb';
 
 interface EpisodeOverlayProps {
@@ -35,7 +34,6 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
     el.addEventListener('wheel', handleWheel, { passive: false });
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
-
   
   const isDragging = useRef(false);
   const startX = useRef(0);
@@ -95,25 +93,13 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
       />
       
       {/* Bottom Panel */}
-      <div className="w-full relative z-10 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b] to-transparent pt-32 pb-8 pointer-events-auto animate-in slide-in-from-bottom-8 duration-500 ease-out">
+      <div className="w-full relative z-10 bg-gradient-to-t from-black via-black to-transparent pt-32 pb-8 pointer-events-auto animate-in slide-in-from-bottom-8 duration-500 ease-out">
         <div className="w-full max-w-[1600px] mx-auto px-6 md:px-12 flex flex-col gap-6">
           
           {/* Header */}
           <div className="flex items-end justify-between border-b border-white/10 pb-4">
             <div className="flex items-center gap-4 md:gap-6 flex-wrap">
-              {type === 'tv' && data.seasons && (
-                <div className="w-fit">
-                  <SeasonSelector 
-                    seasons={data.seasons.filter((s: any) => s.season_number > 0)} 
-                    currentSeason={currentSeason}
-                    onSeasonChange={onSeasonChange}
-                  />
-                </div>
-              )}
-              
-              
-              
-
+              <h2 className="text-2xl font-bold text-white drop-shadow-md">Episodes</h2>
               <div className="text-white/60 font-medium text-sm bg-white/5 px-4 py-1.5 rounded-full border border-white/5 shadow-sm">
                 {episodes.length} Episodes
               </div>
@@ -129,7 +115,7 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
           {/* Horizontal Episode List */}
           <div 
             ref={scrollRef}
-            className="flex gap-4 overflow-x-auto pb-6 pt-2 px-2 scrollbar-hide cursor-grab active:cursor-grabbing select-none -mx-2"
+            className="flex gap-6 overflow-x-auto pb-12 pt-6 px-6 md:px-8 scrollbar-hide cursor-grab active:cursor-grabbing select-none -mx-6 md:-mx-8"
             onMouseDown={handleMouseDown}
             onMouseLeave={handleMouseLeave}
             onMouseUp={handleMouseUp}
@@ -143,14 +129,14 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
                   id={isActive ? 'active-episode-card' : undefined}
                   key={episode.id || episode.episode_number}
                   onClick={() => handleEpisodeClick(episode.episode_number)}
-                  className={`flex-none w-64 md:w-72 flex flex-col gap-3 group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 ${isActive ? 'scale-110' : 'hover:scale-110'}`}
+                  className={`flex-none w-64 md:w-72 flex flex-col gap-3 group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50`}
                 >
-                  <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)]'}`}>
+                  <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-black scale-105' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] group-hover:scale-105'}`}>
                     {episode.still_path ? (
                       <img 
                         src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
                         alt={episode.name}
-                        className={`w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'brightness-110 scale-105' : 'brightness-75 group-hover:brightness-110 group-hover:scale-105'}`}
+                        className={`w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'brightness-110' : 'brightness-75 group-hover:brightness-110'}`}
                         loading="lazy" draggable={false} 
                       />
                     ) : (

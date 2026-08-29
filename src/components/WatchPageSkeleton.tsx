@@ -6,7 +6,7 @@ export default function WatchPageSkeleton({ type }: { type: 'movie' | 'tv' }) {
       <div className="absolute inset-0 bg-white/5 animate-pulse" />
       
       {/* Gradients */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0b0b0b] via-[#0b0b0b]/60 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
       
       <div className="absolute inset-0 z-10 flex flex-col justify-end px-6 pb-6 pt-16 md:px-12 md:pb-10 lg:px-16 lg:pb-12 w-full">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 md:gap-12 w-full max-w-7xl mx-auto h-full">

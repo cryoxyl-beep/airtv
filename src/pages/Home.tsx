@@ -147,7 +147,7 @@ safeFetch(() => fetchTrending()),
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0b0b0b] pb-20 font-sans overflow-x-hidden w-[100vw]">
+    <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-[100vw]">
       <Hero items={data.heroItems} />
       <div className="relative z-20 flex flex-col gap-10 pt-4">
         

@@ -21,7 +21,7 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect,
             className="flex flex-col gap-3 group cursor-pointer relative transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110"
           >
             {/* Image Container */}
-            <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)]'}`}>
+            <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-black' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)]'}`}>
               {episode.still_path ? (
                 <img 
                   src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
