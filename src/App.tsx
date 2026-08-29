@@ -47,8 +47,9 @@ export default function App() {
         <Route path="/watch/tv/:id/:season/:episode" element={<WatchPage type="tv" />} />
         <Route path="/anime/:id" element={<WatchPage type="anime" />} />
         <Route path="/anime/:id/:episode" element={<WatchPage type="anime" />} />
-        <Route path="/play/:type/:id" element={<PlayerPage />} />
-        <Route path="/play/:type/:id/:season/:episode" element={<PlayerPage />} />
+        <Route path="/play/movie/:id" element={<PlayerPage type="movie" />} />
+        <Route path="/play/tv/:id/:season/:episode" element={<PlayerPage type="tv" />} />
+        <Route path="/play/anime/:id/:episode" element={<PlayerPage type="anime" />} />
         <Route path="/browse/:platform" element={<BrowsePage />} />
         <Route path="/search" element={<SearchPage />} />
         {/* Catch-all */}

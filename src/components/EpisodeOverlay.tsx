@@ -36,6 +36,42 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
     return () => el.removeEventListener('wheel', handleWheel);
   }, []);
 
+  
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeft = useRef(0);
+  const dragDistance = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollRef.current) return;
+    isDragging.current = true;
+    dragDistance.current = 0;
+    startX.current = e.pageX - scrollRef.current.offsetLeft;
+    scrollLeft.current = scrollRef.current.scrollLeft;
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !scrollRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollRef.current.offsetLeft;
+    const walk = (x - startX.current) * 1.5;
+    scrollRef.current.scrollLeft = scrollLeft.current - walk;
+    dragDistance.current = Math.abs(x - startX.current);
+  };
+
+  const handleEpisodeClick = (episode_number: number) => {
+    if (dragDistance.current > 5) return;
+    onEpisodeSelect(episode_number);
+  };
+
   const episodes = seasonData?.episodes || [];
 
   return (
@@ -78,7 +114,11 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
         {/* Horizontal Episode List */}
         <div 
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto pb-6 pt-2 px-2 snap-x scrollbar-hide"
+          className="flex gap-4 overflow-x-auto pb-6 pt-2 px-2 scrollbar-hide cursor-grab active:cursor-grabbing select-none"
+          onMouseDown={handleMouseDown}
+          onMouseLeave={handleMouseLeave}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
           {episodes.map((episode: any) => {
@@ -86,8 +126,8 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
             return (
               <div 
                 key={episode.id || episode.episode_number}
-                onClick={() => onEpisodeSelect(episode.episode_number)}
-                className={`flex-none w-64 md:w-72 flex flex-col gap-3 group cursor-pointer snap-start transition-all duration-300 hover:scale-105 ${isActive ? 'scale-105' : ''}`}
+                onClick={() => handleEpisodeClick(episode.episode_number)}
+                className={`flex-none w-64 md:w-72 flex flex-col gap-3 group transition-all duration-300 hover:scale-105 ${isActive ? 'scale-105' : ''}`}
               >
                 <div className={`relative aspect-video rounded-md overflow-hidden bg-[#141414] border ${isActive ? 'border-white' : 'border-white/10 group-hover:border-white/30'} transition-colors`}>
                   {episode.still_path ? (
@@ -95,8 +135,7 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
                       src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
                       alt={episode.name}
                       className={`w-full h-full object-cover transition-all duration-300 ${isActive ? 'brightness-110' : 'group-hover:brightness-110'}`}
-                      loading="lazy"
-                    />
+                      loading="lazy" draggable={false} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white/20">
                       No Image

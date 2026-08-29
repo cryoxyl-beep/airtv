@@ -50,7 +50,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
-  const isImmersive = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/');
+  const isImmersive = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/') || location.pathname.startsWith('/play/');
   
   if (isImmersive) return null;
   

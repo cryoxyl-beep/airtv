@@ -8,16 +8,18 @@ import EpisodeOverlay from '../components/EpisodeOverlay';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl } from '../utils/providers';
 import { ArrowLeft, ListVideo } from 'lucide-react';
 
-export default function PlayerPage() {
-  const { type, id, season, episode } = useParams();
+export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' | 'anime' }) {
+  const { type: paramType, id, season, episode } = useParams();
   const navigate = useNavigate();
   
+  const type = propType || paramType;
+
   const [data, setData] = useState<any>(null);
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
 
-  const activeSeason = season ? parseInt(season, 10) : 1;
+  const activeSeason = type === 'tv' ? (season ? parseInt(season, 10) : 1) : undefined;
   const activeEpisode = episode ? parseInt(episode, 10) : 1;
 
   useEffect(() => {
@@ -95,7 +97,7 @@ export default function PlayerPage() {
     if (type === 'movie') {
       providerUrl = buildMovieProviderUrl('vidnest', id);
     } else if (type === 'tv') {
-      providerUrl = buildSeriesProviderUrl('vidnest', id, activeSeason, activeEpisode);
+      providerUrl = buildSeriesProviderUrl('vidnest', id, activeSeason || 1, activeEpisode);
     } else if (type === 'anime') {
       const malId = data.mal_id || data.idmal || data.id_mal;
       providerUrl = buildAnimeProviderUrl('vidnest', id, malId, activeEpisode, 'sub');
@@ -106,8 +108,13 @@ export default function PlayerPage() {
     if (type === 'tv') {
       navigate(`/play/tv/${id}/${newSeason}/1`, { replace: true });
     } else if (type === 'anime') {
-      setAnimeSeasonPreference(data.animeGroup.groupId, newSeason);
-      navigate(`/play/anime/${newSeason}/1`, { replace: true });
+      const targetSeasonEntry = data.animeGroup?.seasons?.find((s: any) => s.anilistId === newSeason || s.seasonNumber === newSeason);
+      const targetId = targetSeasonEntry ? targetSeasonEntry.anilistId : newSeason;
+      
+      if (data.animeGroup?.groupId) {
+        setAnimeSeasonPreference(data.animeGroup.groupId, targetId);
+      }
+      navigate(`/play/anime/${targetId}/1`, { replace: true });
     }
   };
 
@@ -168,7 +175,7 @@ export default function PlayerPage() {
           type={type as any}
           data={data}
           seasonData={seasonData}
-          currentSeason={activeSeason}
+          currentSeason={activeSeason || 1}
           currentEpisode={activeEpisode}
           onSeasonChange={handleSeasonChange}
           onEpisodeSelect={handleEpisodeChange}
