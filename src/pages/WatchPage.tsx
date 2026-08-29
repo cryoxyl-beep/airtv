@@ -108,7 +108,7 @@ export default function WatchPage({ type }: WatchPageProps) {
         </div>
 
         {/* Player Skeleton */}
-        <div className="w-full relative bg-black pt-0 lg:pt-0">
+        <div className="w-full relative bg-\[#0b0b0b\] pt-0 lg:pt-0">
           <WatchPageSkeleton type={type === 'anime' ? 'tv' : type} />
         </div>
 
@@ -188,7 +188,7 @@ export default function WatchPage({ type }: WatchPageProps) {
       </div>
 
       {/* Main Video Area */}
-      <div className="w-full relative bg-black pt-0 lg:pt-0">
+      <div className="w-full relative bg-\[#0b0b0b\] pt-0 lg:pt-0">
         <WatchPageContent 
           item={data} 
           type={type} 
