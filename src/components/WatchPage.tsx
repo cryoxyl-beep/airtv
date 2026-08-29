@@ -5,10 +5,7 @@ import { getVideoMutedPreference, setVideoMutedPreference } from '../utils/prefe
 
 interface WatchPageProps {
   onPlay?: () => void;
-  isProviderActive?: boolean;
-  providerIframeUrl?: string | null;
-  onToggleEpisodes?: () => void;
-  item: any;
+    item: any;
   type: 'movie' | 'tv' | 'anime';
   seasonNumber?: number;
   episodeNumber?: number;
@@ -16,7 +13,7 @@ interface WatchPageProps {
   forceFullScreen?: boolean;
 }
 
-export default function WatchPage({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen, onPlay, isProviderActive, providerIframeUrl, onToggleEpisodes }: WatchPageProps) { console.log('WatchPageContent rendered with providerIframeUrl:', providerIframeUrl);
+export default function WatchPage({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen, onPlay }: WatchPageProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
   const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
   
@@ -179,21 +176,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
   }, [trailerPlaying, trailerEnded, resetInactivityTimer]);
 
   
-  useEffect(() => {
-    if (isProviderActive) {
-      setTrailerEnded(true);
-      setTrailerPlaying(false);
-      isPlayingRef.current = false;
-      if (iframeRef.current && iframeRef.current.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-          '*'
-        );
-      }
-    }
-  }, [isProviderActive]);
-
-  const handleMouseMove = () => {
+    const handleMouseMove = () => {
     if (trailerPlaying && !trailerEnded) {
       resetInactivityTimer(2000);
     }
@@ -230,7 +213,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       
       {/* Layer 0: YouTube Player */}
       <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
-        {trailerKey && !trailerEnded && !isProviderActive && (
+        {trailerKey && !trailerEnded && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
             <iframe
               ref={iframeRef}
@@ -360,33 +343,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
         </div>
       </div>
 
-      {/* Layer 3: Provider iframe */}
-      {isProviderActive && providerIframeUrl && (
-        <div className="absolute inset-0 z-40 bg-black">
-          <iframe
-            key={`iframe-${providerIframeUrl || 'provider'}`}
-            src={providerIframeUrl}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen"
-            allowFullScreen
-          />
-          {type !== 'movie' && (
-            <div className="absolute top-6 right-6 z-50 transition-opacity duration-300 pointer-events-auto">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleEpisodes && onToggleEpisodes();
-                }}
-                className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
-                aria-label="Episodes"
-              >
-                <ListVideo className="w-5 h-5 text-white" />
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* Provider iframe removed, now in PlayerPage */}
     </div>
   );
 }

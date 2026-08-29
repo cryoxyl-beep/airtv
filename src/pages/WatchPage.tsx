@@ -27,9 +27,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   // Derived directly from the route, no React state
   const activeSeason = season ? parseInt(season, 10) : 1;
   const activeEpisode = episode ? parseInt(episode, 10) : 1;
-  const [isProviderActive, setIsProviderActive] = useState(false);
-  const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
-
+    
   
 
 
@@ -240,11 +238,6 @@ export default function WatchPage({ type }: WatchPageProps) {
   }
 
   const handleBack = () => {
-    if (isProviderActive) {
-      setIsProviderActive(false);
-      setShowEpisodeOverlay(false);
-      return;
-    }
     if (window.history.length > 1) {
       navigate(-1);
     } else {
@@ -263,28 +256,15 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   const handleEpisodeChange = (newEpisode: number) => {
     if (type === 'tv') {
-      navigate(`/watch/tv/${id}/${activeSeason}/${newEpisode}`, { replace: false });
+      navigate(`/play/tv/${id}/${activeSeason}/${newEpisode}`, { replace: false });
     } else if (type === 'anime') {
-      navigate(`/anime/${id}/${newEpisode}`, { replace: false });
+      navigate(`/play/anime/${id}/${newEpisode}`, { replace: false });
     } else {
       
     }
   };
 
   
-  let providerUrl: string | null = null;
-
-  if (data) {
-    if (type === 'movie') {
-      providerUrl = buildMovieProviderUrl('vidnest', data.id);
-    } else if (type === 'tv') {
-      providerUrl = buildSeriesProviderUrl('vidnest', data.id, activeSeason, activeEpisode);
-    } else if (type === 'anime') {
-      const malId = data.mal_id || data.idmal || data.id_mal;
-      providerUrl = buildAnimeProviderUrl('vidnest', data.id, malId, activeEpisode, 'sub');
-    }
-  }
-
   const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1) || (type === 'anime' && data?.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1));
 
   return (
@@ -309,30 +289,19 @@ export default function WatchPage({ type }: WatchPageProps) {
           episodeNumber={(type === 'tv' || type === 'anime') ? activeEpisode : undefined}
           seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
           forceFullScreen={!showBottomSection}
-          onPlay={() => setIsProviderActive(true)}
-          isProviderActive={isProviderActive}
-          providerIframeUrl={providerUrl}
-          onToggleEpisodes={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
-        />
+          onPlay={() => {
+            if (type === 'movie') {
+              navigate(`/play/movie/${id}`);
+            } else if (type === 'tv') {
+              navigate(`/play/tv/${id}/${activeSeason}/${activeEpisode}`);
+            } else if (type === 'anime') {
+              navigate(`/play/anime/${id}/${activeEpisode}`);
+            }
+          }}
+          />
       </div>
 
-      {isProviderActive && showBottomSection && showEpisodeOverlay && (
-        <EpisodeOverlay 
-          type={type as any}
-          data={data}
-          seasonData={seasonData}
-          currentSeason={activeSeason}
-          currentEpisode={activeEpisode}
-          onSeasonChange={handleSeasonChange}
-          onEpisodeSelect={(ep) => {
-            handleEpisodeChange(ep);
-            setShowEpisodeOverlay(false);
-          }}
-          id={id}
-          onClose={() => setShowEpisodeOverlay(false)}
-        />
-      )}
-      
+            
       {/* Details & Episode Selection Area */}
       {showBottomSection && (
         <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">

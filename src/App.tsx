@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import WatchPage from './pages/WatchPage';
+import PlayerPage from './pages/PlayerPage';
 import BrowsePage from './pages/BrowsePage';
 import SearchPage from './pages/SearchPage';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
@@ -46,6 +47,8 @@ export default function App() {
         <Route path="/watch/tv/:id/:season/:episode" element={<WatchPage type="tv" />} />
         <Route path="/anime/:id" element={<WatchPage type="anime" />} />
         <Route path="/anime/:id/:episode" element={<WatchPage type="anime" />} />
+        <Route path="/play/:type/:id" element={<PlayerPage />} />
+        <Route path="/play/:type/:id/:season/:episode" element={<PlayerPage />} />
         <Route path="/browse/:platform" element={<BrowsePage />} />
         <Route path="/search" element={<SearchPage />} />
         {/* Catch-all */}
