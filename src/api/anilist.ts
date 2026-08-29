@@ -4,6 +4,31 @@ const ANILIST_API_URL = 'https://graphql.anilist.co';
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+const TMDB_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmYmM3ZjM4ZTEwNzBmMWI4NzM2MDc4OTM4MDA1OThkOSIsIm5iZiI6MTcxNzIxNDAzNi4wMzIsInN1YiI6IjY2NWE5YjU0M2MzMmNiMWFiZmFmMGFmOCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.BEKlgnL8r52GcU2Fb8QXcp3W9-giqabR8AtbBlGDmU0';
+
+const fetchTmdbImages = async (tmdbId, tmdbType) => {
+  try {
+    const url = `https://api.themoviedb.org/3/${tmdbType}/${tmdbId}`;
+    const res = await fetch(url, {
+      headers: {
+        accept: 'application/json',
+        Authorization: `Bearer ${TMDB_TOKEN}`
+      }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        poster_path: data.poster_path,
+        backdrop_path: data.backdrop_path
+      };
+    }
+  } catch (e) {
+    console.error('fetchTmdbImages failed', e);
+  }
+  return null;
+};
+
+
 const fetchAniList = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
   const options = {
     method: 'POST',
@@ -52,6 +77,15 @@ const normalizeAniListToTmdb = async (media: any): Promise<any> => {
 
   let poster_path = media.coverImage?.extraLarge || media.coverImage?.large;
   let backdrop_path = media.bannerImage || media.coverImage?.extraLarge;
+  
+  // Override with TMDB images if mapped
+  if (tmdbId && tmdbType) {
+    const tmdbImages = await fetchTmdbImages(tmdbId, tmdbType);
+    if (tmdbImages) {
+      if (tmdbImages.poster_path) poster_path = tmdbImages.poster_path;
+      if (tmdbImages.backdrop_path) backdrop_path = tmdbImages.backdrop_path;
+    }
+  }
   
   const title = media.title?.english || media.title?.romaji || media.title?.native;
 
