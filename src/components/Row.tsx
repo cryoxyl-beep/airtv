@@ -143,13 +143,20 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
           {loadingLogo ? (
             <div className="w-[60%] h-6 bg-white/20 animate-pulse rounded"></div>
           ) : logo ? (
-            <img
-              src={logo}
-              alt={item.title || item.name}
-              className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
-              draggable={false}
-              loading="lazy"
-            />
+            <>
+              <img
+                src={logo}
+                alt={item.title || item.name}
+                className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
+                draggable={false}
+                loading="lazy"
+              />
+              {item.source === 'anilist' && (
+                <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">
+                  {item.title || item.name}
+                </p>
+              )}
+            </>
           ) : (
             <h3 className="text-white font-bold text-lg drop-shadow-md text-center">
               {item.title || item.name}

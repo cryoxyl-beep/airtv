@@ -1,32 +1,30 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/pages/WatchPage.tsx', 'utf-8');
 
-let content = fs.readFileSync('src/pages/WatchPage.tsx', 'utf8');
+const target1 = `      const loadSeason = async () => {
+                  const season = await fetchTVSeason(parseInt(id), activeSeason);
+          setSeasonData(season);
+        } catch (e: any) {`;
+const replacement1 = `      const loadSeason = async () => {
+        try {
+          const season = await fetchTVSeason(parseInt(id), activeSeason);
+          setSeasonData(season);
+        } catch (e: any) {`;
+code = code.replace(target1, replacement1);
 
-// 1. Remove the useState for seasonNumber and episodeNumber
-content = content.replace(
-  "const [seasonNumber, setSeasonNumber] = useState(season ? parseInt(season, 10) : 1);",
-  "// Derived directly from the route, no React state\n  const activeSeason = season ? parseInt(season, 10) : 1;"
-);
+const target2 = `  const handleSeasonChange = (newSeason: number) => {
+    if (type === 'tv') {
+      navigate(\`/watch/tv/\${id}/\${newSeason}/1\`, { replace: false });
+    } else {
+                }
+  };`;
+const replacement2 = `  const handleSeasonChange = (newSeason: number) => {
+    if (type === 'tv') {
+      navigate(\`/watch/tv/\${id}/\${newSeason}/1\`, { replace: false });
+    } else if (type === 'anime') {
+      navigate(\`/anime/\${newSeason}\`, { replace: false });
+    }
+  };`;
+code = code.replace(target2, replacement2);
 
-content = content.replace(
-  "const [episodeNumber, setEpisodeNumber] = useState(episode ? parseInt(episode, 10) : 1);",
-  "const activeEpisode = episode ? parseInt(episode, 10) : 1;"
-);
-
-// 2. Remove the useEffect that synced them
-content = content.replace(
-  /useEffect\(\(\) => \{\s*setSeasonNumber\(.*?\);\s*setEpisodeNumber\(.*?\);\s*\}, \[season, episode\]\);/g,
-  ""
-);
-
-// 3. Replace all usages of seasonNumber with activeSeason
-content = content.replace(/seasonNumber/g, "activeSeason");
-// 4. Replace all usages of episodeNumber with activeEpisode
-content = content.replace(/episodeNumber/g, "activeEpisode");
-
-// 5. Remove any leftover setSeasonNumber / setEpisodeNumber calls
-content = content.replace(/setSeasonNumber\(.*?\);/g, "");
-content = content.replace(/setEpisodeNumber\(.*?\);/g, "");
-
-fs.writeFileSync('src/pages/WatchPage.tsx', content);
-console.log('Fixed WatchPage completely');
+fs.writeFileSync('src/pages/WatchPage.tsx', code);

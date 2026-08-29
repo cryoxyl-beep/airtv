@@ -3,7 +3,7 @@ import { IMAGE_BASE_URL_W500 } from '../api/tmdb';
 
 interface EpisodeListProps {
   episodes: any[];
-  currentEpisode: number;
+  currentEpisode?: number;
   onEpisodeSelect: (episodeNumber: number) => void;
   isAnime?: boolean;
 }
@@ -12,21 +12,21 @@ export default function EpisodeList({ episodes, currentEpisode, onEpisodeSelect,
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
       {episodes.map((episode) => {
-        const isActive = episode.episode_number === currentEpisode;
+        const isActive = currentEpisode !== undefined && episode.episode_number === currentEpisode;
         
         return (
           <div 
             key={episode.id || episode.episode_number}
             onClick={() => onEpisodeSelect(episode.episode_number)}
-            className="flex flex-col gap-3 group cursor-pointer relative"
+            className="flex flex-col gap-3 group cursor-pointer relative transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110"
           >
             {/* Image Container */}
-            <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border transition-all duration-300 shadow-lg ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'border-white/10 group-hover:border-white/30'}`}>
+            <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)]'}`}>
               {episode.still_path ? (
                 <img 
                   src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
                   alt={episode.name}
-                  className={`w-full h-full object-cover transition-all duration-500 ease-out ${isActive ? 'brightness-110 scale-105' : 'brightness-75 group-hover:brightness-100 group-hover:scale-105'}`}
+                  className={`w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'brightness-110 scale-105' : 'brightness-75 group-hover:brightness-110 group-hover:scale-105'}`}
                   loading="lazy"
                 />
               ) : (

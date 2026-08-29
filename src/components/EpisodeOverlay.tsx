@@ -111,19 +111,8 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
                 </div>
               )}
               
-              {type === 'anime' && data.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1 && (
-                <div className="w-fit">
-                  <SeasonSelector 
-                    seasons={data.animeGroup.seasons.map((s: any) => ({
-                      id: s.anilistId,
-                      season_number: s.anilistId,
-                      name: s.displayTitle
-                    }))} 
-                    currentSeason={parseInt(id || "0")}
-                    onSeasonChange={onSeasonChange}
-                  />
-                </div>
-              )}
+              
+              
 
               <div className="text-white/60 font-medium text-sm bg-white/5 px-4 py-1.5 rounded-full border border-white/5 shadow-sm">
                 {episodes.length} Episodes
@@ -154,14 +143,14 @@ export default function EpisodeOverlay({ type, data, seasonData, currentSeason, 
                   id={isActive ? 'active-episode-card' : undefined}
                   key={episode.id || episode.episode_number}
                   onClick={() => handleEpisodeClick(episode.episode_number)}
-                  className={`flex-none w-64 md:w-72 flex flex-col gap-3 group transition-all duration-300 ${isActive ? 'scale-105' : 'hover:scale-105'}`}
+                  className={`flex-none w-64 md:w-72 flex flex-col gap-3 group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 ${isActive ? 'scale-110' : 'hover:scale-110'}`}
                 >
-                  <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border transition-all duration-300 shadow-lg ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)]' : 'border-white/10 group-hover:border-white/30'}`}>
+                  <div className={`relative aspect-video rounded-xl overflow-hidden bg-[#141414] border shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.15)] ring-2 ring-white ring-offset-2 ring-offset-[#0b0b0b]' : 'border-white/10 group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)]'}`}>
                     {episode.still_path ? (
                       <img 
                         src={(episode.still_path?.startsWith('http') ? episode.still_path : `${IMAGE_BASE_URL_W500}${episode.still_path}`)}
                         alt={episode.name}
-                        className={`w-full h-full object-cover transition-all duration-500 ease-out ${isActive ? 'brightness-110 scale-105' : 'brightness-75 group-hover:brightness-100 group-hover:scale-105'}`}
+                        className={`w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] ${isActive ? 'brightness-110 scale-105' : 'brightness-75 group-hover:brightness-110 group-hover:scale-105'}`}
                         loading="lazy" draggable={false} 
                       />
                     ) : (

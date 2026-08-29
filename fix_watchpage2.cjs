@@ -1,9 +1,15 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/pages/WatchPage.tsx', 'utf-8');
 
-let c = fs.readFileSync('src/pages/WatchPage.tsx', 'utf8');
+const target = `          } else {
+            details = await fetchDetails(parseInt(id), type as 'movie' | 'tv');
+          } else if (type === 'tv') {`;
+          
+const replacement = `          } else {
+            details = await fetchDetails(parseInt(id), type as 'movie' | 'tv');
+          }
+          
+          if (type === 'tv') {`;
 
-c = c.replace(/\{isProviderActive && showBottomSection && showEpisodeOverlay && \([\s\S]*?<\/EpisodeOverlay>\s*\)\s*\}/, "");
-// also clean up WatchPageContent to remove the leftover `{isProviderActive && ...` in case it failed
-c = c.replace(/\{isProviderActive && showBottomSection && showEpisodeOverlay && \([\s\S]*?<\/EpisodeOverlay>\s*\)\s*\}/, "");
-
-fs.writeFileSync('src/pages/WatchPage.tsx', c);
+code = code.replace(target, replacement);
+fs.writeFileSync('src/pages/WatchPage.tsx', code);

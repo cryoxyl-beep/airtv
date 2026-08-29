@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
-import { groupCache } from '../api/anilistGroups';
 import { fetchDetails, fetchTVSeason } from '../api/tmdb';
-import { setAnimeSeasonPreference } from '../utils/preferences';
+import { buildAnimeEpisodeList } from '../api/animeResolver';
+import { extractAnimeSeasons } from '../api/animeRelations';
 import EpisodeOverlay from '../components/EpisodeOverlay';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl } from '../utils/providers';
 import { ArrowLeft, ListVideo } from 'lucide-react';
@@ -31,8 +31,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         if (type === 'anime') {
           details = await fetchAnimeDetails(parseInt(id));
           if (details) {
-            details.animeGroup = groupCache.get(parseInt(id));
-            
+                        
             // Generate basic episode array for anime if we don't have tmdb-like season format
             const numEpisodes = details.number_of_episodes || 1;
             const streamingEps = details.anilist_raw?.streamingEpisodes || [];
@@ -99,7 +98,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     } else if (type === 'tv') {
       providerUrl = buildSeriesProviderUrl('vidnest', id, activeSeason || 1, activeEpisode);
     } else if (type === 'anime') {
-      const malId = data.mal_id || data.idmal || data.id_mal;
+      const malId = data.fribb_mapping?.malId || data.mal_id || data.idmal || data.id_mal;
       providerUrl = buildAnimeProviderUrl('vidnest', id, malId, activeEpisode, 'sub');
     }
   }
@@ -108,13 +107,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     if (type === 'tv') {
       navigate(`/play/tv/${id}/${newSeason}/1`, { replace: true });
     } else if (type === 'anime') {
-      const targetSeasonEntry = data.animeGroup?.seasons?.find((s: any) => s.anilistId === newSeason || s.seasonNumber === newSeason);
-      const targetId = targetSeasonEntry ? targetSeasonEntry.anilistId : newSeason;
-      
-      if (data.animeGroup?.groupId) {
-        setAnimeSeasonPreference(data.animeGroup.groupId, targetId);
-      }
-      navigate(`/play/anime/${targetId}/1`, { replace: true });
+      navigate(`/play/anime/${newSeason}/1`, { replace: true });
     }
   };
 

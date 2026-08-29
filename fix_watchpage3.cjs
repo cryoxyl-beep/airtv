@@ -1,15 +1,37 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/pages/WatchPage.tsx', 'utf-8');
 
-let c = fs.readFileSync('src/pages/WatchPage.tsx', 'utf8');
-const startIdx = c.indexOf('{isProviderActive && showBottomSection && showEpisodeOverlay');
-if (startIdx !== -1) {
-    const endIdx = c.indexOf(')}', startIdx);
-    const endIdx2 = c.indexOf(')}', endIdx + 2); // it's nested
-    const endIdx3 = c.indexOf(')}', endIdx2 + 2); // one more just to be safe
-    const realEnd = c.indexOf('/>\n      )}', startIdx);
-    if (realEnd !== -1) {
-        c = c.substring(0, startIdx) + c.substring(realEnd + 12);
-    }
-}
-fs.writeFileSync('src/pages/WatchPage.tsx', c);
-console.log('Removed leftover EpisodeOverlay block');
+const target = `          try {
+            const season = await fetchTVSeason(parseInt(id), targetSeason);
+            setSeasonData(season);
+          } catch (e: any) {
+            console.error("fetchTVSeason failed:", e);
+          }
+        }
+      } catch (err: any) {
+        console.error("Failed to load watch data:", err.message || err);
+        setError(true);
+      } catch (err: any) { console.error("Failed", err); setError(true); } finally {
+        if (!isRedirecting) {
+          setLoading(false);
+        }
+      }`;
+      
+const replacement = `          try {
+            const season = await fetchTVSeason(parseInt(id), targetSeason);
+            setSeasonData(season);
+          } catch (e: any) {
+            console.error("fetchTVSeason failed:", e);
+          }
+        }
+      } catch (err: any) {
+        console.error("Failed to load watch data:", err.message || err);
+        setError(true);
+      } finally {
+        if (!isRedirecting) {
+          setLoading(false);
+        }
+      }`;
+
+code = code.replace(target, replacement);
+fs.writeFileSync('src/pages/WatchPage.tsx', code);

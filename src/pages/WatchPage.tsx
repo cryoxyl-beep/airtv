@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
-import { groupCache } from '../api/anilistGroups';
 import { fetchDetails, fetchTVSeason, fetchTrailer, IMAGE_BASE_URL } from '../api/tmdb';
-import { getAnimeSeasonPreference, setAnimeSeasonPreference } from '../utils/preferences';
+import { buildAnimeEpisodeList } from '../api/animeResolver';
+import { extractAnimeSeasons } from '../api/animeRelations';
 import WatchPageContent from '../components/WatchPage';
 import EpisodeOverlay from '../components/EpisodeOverlay';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl } from '../utils/providers';
@@ -40,123 +40,33 @@ export default function WatchPage({ type }: WatchPageProps) {
         if (!id) throw new Error('No ID');
         
         let details;
-        try {
-          if (type === 'anime') {
-            details = await fetchAnimeDetails(parseInt(id));
-            if (details) {
-              details.source = 'anilist';
-              details.media_type = 'anime';
-              const group = groupCache.get(parseInt(id));
-              details.animeGroup = group;
-              
-              if (group && !episode) {
-                 const prefId = getAnimeSeasonPreference(group.groupId);
-                 if (prefId && prefId !== parseInt(id)) {
-                    const exists = group.seasons.find((s: any) => s.anilistId === prefId);
-                    if (exists) {
-                       isRedirecting = true;
-                       navigate(`/anime/${prefId}`, { replace: true });
-                       return;
-                    }
-                 }
-              }
-            }
-          } else {
-            details = await fetchDetails(parseInt(id), type);
+        if (type === 'anime') {
+          details = await fetchAnimeDetails(parseInt(id));
+          if (details) {
+            const numEpisodes = details.number_of_episodes || 12;
+            const mergedEpisodes = await buildAnimeEpisodeList(parseInt(id), numEpisodes);
+            details.animeGroup = { seasons: extractAnimeSeasons(details.anilist_raw) };
+            setSeasonData({ episodes: mergedEpisodes });
           }
-        } catch (e: any) {
-          console.error("fetchDetails failed:", e);
-          throw new Error(`Details fetch failed: ${e.message}`);
+        } else {
+          details = await fetchDetails(parseInt(id), type as 'movie' | 'tv');
         }
         
         setData(details);
 
-        // 2. If TV show, fetch specific season details
-        if (type === 'anime') {
-          // Construct base episodes from AniList count
-          // Construct base episodes from AniList count
-          const numEpisodes = details.number_of_episodes || 1;
-          
-          const streamingEps = details.anilist_raw?.streamingEpisodes || [];
-          
-          let anilistEpisodes = [];
-          if (streamingEps.length > 0) {
-            anilistEpisodes = streamingEps.map((se, i) => {
-              let epNum = i + 1;
-              const match = se.title?.match(/Episode\s+(\d+)|^\s*(\d+)\s*-/i);
-              if (match) {
-                epNum = parseInt(match[1] || match[2], 10);
-              }
-              
-              let epName = `Episode ${epNum}`;
-              if (se.title) {
-                const parts = se.title.split('-');
-                if (parts.length > 1) {
-                  epName = parts.slice(1).join('-').trim();
-                } else {
-                  epName = se.title;
-                }
-              }
-              
-              return {
-                episode_number: epNum,
-                name: epName,
-                overview: '',
-                still_path: se.thumbnail
-              };
-            });
-            // Ensure they are sorted
-            anilistEpisodes.sort((a, b) => a.episode_number - b.episode_number);
-          } else {
-            anilistEpisodes = Array.from({ length: numEpisodes }, (_, i) => ({
-              episode_number: i + 1,
-              name: `Episode ${i + 1}`,
-              overview: '',
-              still_path: null
-            }));
-          }
-
-          let mergedEpisodes = [...anilistEpisodes];
-          
-          if (details.tmdb_id && details.tmdb_type !== 'movie') {
-            try {
-              // Fribb gives us the exact TMDB season mapping
-              const targetSeason = details.tmdb_season || 1;
-              const tmdbSeasonData = await fetchTVSeason(details.tmdb_id, targetSeason);
-              
-              if (tmdbSeasonData && tmdbSeasonData.episodes) {
-                // Merge ONLY TMDB thumbnails into our AniList episodes
-                mergedEpisodes = mergedEpisodes.map(ep => {
-                  const tmdbEp = tmdbSeasonData.episodes.find((t: any) => t.episode_number === ep.episode_number);
-                  return {
-                    ...ep,
-                    still_path: tmdbEp?.still_path || ep.still_path
-                  };
-                });
-              }
-            } catch (e) {
-              console.warn("Failed to fetch TMDB season data for anime", e);
-            }
-          }
-          
-          setSeasonData({ episodes: mergedEpisodes });
-          // Force activeSeason to 1 to hide season selector logic if it's based on it
-          
-          
-        } else if (type === 'tv') {
-          // Check if requested season exists
+        if (type === 'tv') {
           const seasons = details.seasons || [];
           let targetSeason = activeSeason;
           const seasonExists = seasons.find((s: any) => s.season_number === targetSeason);
           
           if (!seasonExists && seasons.length > 0) {
-            // Default to the first valid season (prefer > 0)
             const validSeason = seasons.find((s: any) => s.season_number > 0) || seasons[0];
             targetSeason = validSeason.season_number;
             isRedirecting = true;
             navigate(`/watch/tv/${id}/${targetSeason}/1`, { replace: true });
             return;
           }
+          
           try {
             const season = await fetchTVSeason(parseInt(id), targetSeason);
             setSeasonData(season);
@@ -173,16 +83,13 @@ export default function WatchPage({ type }: WatchPageProps) {
         }
       }
     };
-
     loadContent();
   }, [id, type]);
 
   // Load season data when activeSeason state changes, but don't reload everything
   useEffect(() => {
     if (type === 'tv' && id && !loading && data) {
-      const loadSeason = async () => {
-        try {
-          const season = await fetchTVSeason(parseInt(id), activeSeason);
+      const loadSeason = async () => { try { const season = await fetchTVSeason(parseInt(id), activeSeason);
           setSeasonData(season);
         } catch (e: any) {
           console.error("fetchTVSeason failed:", e);
@@ -265,7 +172,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   };
 
   
-  const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 1) || (type === 'anime' && data?.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1));
+  const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 0));
 
   return (
     <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
@@ -317,25 +224,8 @@ export default function WatchPage({ type }: WatchPageProps) {
               </div>
             )}
             
-            {type === 'anime' && data.animeGroup && data.animeGroup.seasons && data.animeGroup.seasons.length > 1 && (
-              <div className="mb-8 flex flex-col gap-2">
-                
-                <div>
-                  <SeasonSelector 
-                    seasons={data.animeGroup.seasons.map((s: any) => ({
-                      id: s.anilistId,
-                      season_number: s.anilistId,
-                      name: s.displayTitle
-                    }))} 
-                    currentSeason={parseInt(id || "0")}
-                    onSeasonChange={(newId) => {
-                       setAnimeSeasonPreference(data.animeGroup.groupId, newId);
-                       navigate(`/anime/${newId}`, { replace: true });
-                    }}
-                  />
-                </div>
-              </div>
-            )}
+            
+            
 
             {/* Episode Count */}
             <div className="text-white/60 mb-6 font-medium text-lg">
@@ -345,7 +235,7 @@ export default function WatchPage({ type }: WatchPageProps) {
             {/* Episode Grid */}
             <EpisodeList 
               episodes={seasonData.episodes || []} 
-              currentEpisode={activeEpisode}
+              currentEpisode={episode ? parseInt(episode, 10) : undefined}
               onEpisodeSelect={handleEpisodeChange}
               isAnime={type === 'anime'}
             />

@@ -1,9 +1,12 @@
 
 export interface FribbMapping {
   anilistId: number;
+  malId?: number;
+  tvdbId?: number;
   tmdbTvId?: number;
   tmdbMovieId?: number;
-  seasonMapping?: number;
+  seasonMappingTVDB?: number;
+  seasonMappingTMDB?: number;
   mappingFound: boolean;
   type: string;
 }
@@ -40,6 +43,8 @@ export const preloadFribbMapping = async () => {
         if (item.anilist_id) {
           const mapping: FribbMapping = {
             anilistId: item.anilist_id,
+            malId: item.mal_id,
+            tvdbId: item.tvdb_id,
             mappingFound: !!item.themoviedb_id,
             type: item.type || 'TV'
           };
@@ -63,7 +68,10 @@ export const preloadFribbMapping = async () => {
           }
           
           if (item.season?.tmdb) {
-            mapping.seasonMapping = item.season.tmdb;
+            mapping.seasonMappingTMDB = item.season.tmdb;
+          }
+          if (item.season?.tvdb) {
+            mapping.seasonMappingTVDB = item.season.tvdb;
           }
           
           anilistToMapping.set(item.anilist_id, mapping);
