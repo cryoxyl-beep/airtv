@@ -206,13 +206,13 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
 
   return (
     <div 
-      className={`relative w-full bg-\[#0b0b0b\] overflow-hidden group ${type === 'movie' || forceFullScreen ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
+      className={`relative w-full bg-black overflow-hidden group ${type === 'movie' || forceFullScreen ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
       
       {/* Layer 0: YouTube Player */}
-      <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-\[#0b0b0b\] transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
+      <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
         {trailerKey && !trailerEnded && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
             <iframe
@@ -246,7 +246,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
           background: `
             linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0) 75%),
             linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%),
-            linear-gradient(to top, #0b0b0b 0px, rgba(11,11,11,0.98) 20px, rgba(11,11,11,0.85) 100px, rgba(11,11,11,0.4) 200px, transparent 300px)
+            linear-gradient(to top, #000 0px, rgba(0,0,0,0.98) 15px, rgba(0,0,0,0.85) 50px, rgba(0,0,0,0.5) 150px, rgba(0,0,0,0.1) 250px, transparent 300px)
           `,
         }}
       />

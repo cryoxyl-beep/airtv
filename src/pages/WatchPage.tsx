@@ -101,21 +101,21 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   if (loading) {
       return (
-      <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+      <div className={`min-h-screen bg-black font-sans text-white relative ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
         {/* Top Nav Placeholder */}
         <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
           <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
         </div>
 
         {/* Player Skeleton */}
-        <div className="w-full relative bg-\[#0b0b0b\] pt-0 lg:pt-0">
+        <div className="w-full relative bg-black pt-0 lg:pt-0">
           <WatchPageSkeleton type={type === 'anime' ? 'tv' : type} />
         </div>
 
         {/* TV Specific Sections Skeleton */}
         {(type === 'tv' || type === 'anime') && (
-          <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
-            <div className="mt-2">
+          <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10">
+            <div className="mt-0">
               <div className="mb-8 w-48 h-10 bg-white/10 rounded-md animate-pulse" />
               <div className="w-24 h-6 bg-white/10 rounded animate-pulse mb-6" />
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
@@ -132,7 +132,7 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   if (error || !data) {
     return (
-      <div className="min-h-screen bg-[#0b0b0b] flex flex-col items-center justify-center text-white gap-4">
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white gap-4">
         <p className="text-xl">Content unavailable.</p>
         <button 
           onClick={() => navigate(-1)} 
@@ -175,7 +175,7 @@ export default function WatchPage({ type }: WatchPageProps) {
   const showBottomSection = ((type === 'tv' && data.seasons && seasonData) || (type === 'anime' && seasonData?.episodes?.length > 0));
 
   return (
-    <div className={`min-h-screen bg-[#0b0b0b] font-sans text-white relative ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
+    <div className={`min-h-screen bg-black font-sans text-white relative ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
       {/* Top Nav (Minimal) */}
       <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
         <button 
@@ -188,7 +188,7 @@ export default function WatchPage({ type }: WatchPageProps) {
       </div>
 
       {/* Main Video Area */}
-      <div className="w-full relative bg-\[#0b0b0b\] pt-0 lg:pt-0">
+      <div className="w-full relative bg-black pt-0 lg:pt-0">
         <WatchPageContent 
           item={data} 
           type={type} 
@@ -211,8 +211,8 @@ export default function WatchPage({ type }: WatchPageProps) {
             
       {/* Details & Episode Selection Area */}
       {showBottomSection && (
-        <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-2 md:pt-4">
-          <div className="mt-2">
+        <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-0">
+          <div className="mt-0">
             {/* Season Selector */}
             {type === 'tv' && data.seasons && (
               <div className="mb-8">
