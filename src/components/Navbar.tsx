@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 
-type FilterType = 'all' | 'movies' | 'series' | 'anime';
+type FilterType = '' | 'all' | 'movies' | 'series' | 'anime';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -12,18 +12,23 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   
+  const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [filter, setFilter] = useState<FilterType>('');
+  const [showFilterError, setShowFilterError] = useState(false);
   
   useEffect(() => {
     if (location.pathname === '/search') {
-      setInputValue(searchParams.get('q') || '');
-      setFilter((searchParams.get('filter') as FilterType) || 'all');
+      const q = searchParams.get('q') || '';
+      setInputValue(q);
+      if (q) setIsExpanded(true);
+      setFilter((searchParams.get('filter') as FilterType) || '');
     }
   }, [location.pathname, searchParams]);
 
   useEffect(() => {
     const handleFocusSearch = () => {
+      setIsExpanded(true);
       setIsVisible(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
       setTimeout(() => {
@@ -50,6 +55,22 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
   
+    useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const container = document.getElementById('search-form-container');
+      if (container && !container.contains(e.target as Node)) {
+        if (!inputValue) {
+          setIsExpanded(false);
+        }
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [inputValue]);
+
+  const isSearchActive = isExpanded || inputValue || isFilterOpen || location.pathname === '/search';
+
   const isImmersive = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/') || location.pathname.startsWith('/play/');
   
   if (isImmersive) return null;
@@ -57,7 +78,14 @@ export default function Navbar() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputValue.trim()) {
+      if (!filter) {
+        setIsFilterOpen(true);
+        setShowFilterError(true);
+        setTimeout(() => setShowFilterError(false), 2000);
+        return;
+      }
       setIsFilterOpen(false);
+      setShowFilterError(false);
       navigate(`/search?q=${encodeURIComponent(inputValue.trim())}&filter=${filter}`);
     }
   };
@@ -65,11 +93,16 @@ export default function Navbar() {
   const FilterButton = ({ type, label }: { type: FilterType, label: string }) => (
     <button
       type="button"
-      onClick={() => setFilter(type)}
+      onClick={() => {
+        setFilter(type);
+        setShowFilterError(false);
+      }}
       className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${
         filter === type 
           ? 'bg-white text-black' 
-          : 'bg-[#1A1A1A] border border-white/20 text-white hover:bg-white/10'
+          : showFilterError
+            ? 'bg-[#1A1A1A] border border-red-500/50 text-red-400 hover:bg-red-500/10'
+            : 'bg-[#1A1A1A] border border-white/20 text-white hover:bg-white/10'
       }`}
     >
       {label}
@@ -84,20 +117,35 @@ export default function Navbar() {
     >
       <div className="flex-1" />
       
-      <div className="pointer-events-auto flex justify-end w-full md:w-auto">
+      <div id="search-form-container" className="pointer-events-auto flex justify-end w-full md:w-auto relative">
         <form 
           onSubmit={handleSubmit}
-          className={`relative bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-300 ease-in-out ${isFilterOpen ? 'rounded-2xl' : 'rounded-full'} focus-within:bg-[#252525]/90 focus-within:border-white/30 w-full sm:w-[450px] lg:w-[500px] overflow-hidden hover:shadow-2xl`}
+          className={`relative bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-300 ease-out rounded-full focus-within:bg-[#252525]/90 focus-within:border-white/30 ${isSearchActive ? 'w-full sm:w-[450px] lg:w-[500px]' : 'w-[100px] md:w-[150px]'} hover:shadow-2xl z-20`}
         >
           <div className="relative flex items-center h-12 md:h-14">
-            <Search className="absolute left-5 w-5 h-5 text-white/50 pointer-events-none" />
+            <button 
+              type="button"
+              onClick={() => {
+                if (!isSearchActive) {
+                  setIsExpanded(true);
+                  setTimeout(() => {
+                    const input = document.querySelector('input[name="search"]');
+                    if (input) (input as HTMLElement).focus();
+                  }, 50);
+                }
+              }}
+              className={`absolute left-5 w-5 h-5 flex items-center justify-center text-white/50 transition-colors z-30 ${!isSearchActive ? 'cursor-pointer hover:text-white pointer-events-auto' : 'pointer-events-none'}`}
+            >
+              <Search className="w-full h-full" />
+            </button>
             <input 
               type="text"
               name="search"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onFocus={() => setIsExpanded(true)}
               placeholder="Search..."
-              className="w-full h-full bg-transparent pl-14 pr-[160px] md:pr-[200px] text-base text-white outline-none placeholder:text-white/50 cursor-text"
+              className={`h-full bg-transparent text-base text-white outline-none placeholder:text-white/50 cursor-text transition-all duration-300 ${isSearchActive ? 'w-full pl-14 pr-[160px] md:pr-[200px] opacity-100 pointer-events-auto' : 'w-0 pl-14 pr-0 opacity-0 pointer-events-none'}`}
               autoComplete="off"
             />
             <div className="absolute right-3 flex items-center gap-1.5 md:gap-2">
@@ -123,17 +171,19 @@ export default function Navbar() {
             </div>
           </div>
           
-          <div className={`grid transition-[grid-template-rows,opacity,border-color] duration-300 ease-in-out bg-black/20 ${isFilterOpen ? 'grid-rows-[1fr] opacity-100 border-t border-white/10' : 'grid-rows-[0fr] opacity-0 border-t border-transparent'}`}>
-            <div className="overflow-hidden">
-              <div className="px-5 py-4 flex flex-wrap gap-2.5">
-              <FilterButton type="all" label="All" />
-              <FilterButton type="movies" label="Movies" />
-              <FilterButton type="series" label="Series" />
-              <FilterButton type="anime" label="Anime" />
-              </div>
-            </div>
-          </div>
         </form>
+        
+        {/* Floating Dropdown Filter Menu */}
+        <div 
+          className={`absolute top-full mt-2 right-0 w-full sm:w-[450px] lg:w-[500px] bg-[#1A1A1A]/95 border border-white/10 shadow-2xl backdrop-blur-xl rounded-3xl overflow-hidden transition-all duration-300 origin-top ${isFilterOpen ? 'opacity-100 translate-y-0 scale-y-100 pointer-events-auto' : 'opacity-0 -translate-y-2 scale-y-95 pointer-events-none'}`}
+        >
+          <div className="px-5 py-4 flex flex-wrap gap-2.5">
+            <FilterButton type="all" label="All" />
+            <FilterButton type="movies" label="Movies" />
+            <FilterButton type="series" label="Series" />
+            <FilterButton type="anime" label="Anime" />
+          </div>
+        </div>
       </div>
     </div>
   );

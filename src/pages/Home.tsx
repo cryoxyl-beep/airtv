@@ -8,6 +8,8 @@ import { fetchTrending, fetchTop10, fetchAllTimeFavorites, fetchDetails, fetchBy
 let cachedHomeData: any = null;
 
 export default function Home() {
+  const [isLoading, setIsLoading] = useState(!cachedHomeData);
+  const [isFadingOut, setIsFadingOut] = useState(false);
   const [data, setData] = useState<any>(cachedHomeData || {
     heroItems: [],
     trending: [],
@@ -138,8 +140,12 @@ safeFetch(() => fetchTrending()),
         
         cachedHomeData = newData;
         setData(newData);
+        setIsFadingOut(true);
+        setTimeout(() => setIsLoading(false), 800);
       } catch (err) {
         console.error("Failed to load TMDB data", err);
+        setIsFadingOut(true);
+        setTimeout(() => setIsLoading(false), 800);
       }
     };
     
@@ -148,6 +154,20 @@ safeFetch(() => fetchTrending()),
 
   return (
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-[100vw]">
+      {isLoading && (
+        <div 
+          className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-700 ease-in-out ${isFadingOut ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="flex flex-col items-center gap-4">
+            <h1 className="text-[#d4d4d4] text-5xl md:text-7xl font-black lowercase tracking-tight drop-shadow-md animate-pulse">
+              miyoro
+            </h1>
+            <div className="w-32 md:w-40 h-1 bg-white/10 rounded-full overflow-hidden mt-1 relative">
+              <div className="absolute top-0 left-0 h-full w-1/3 bg-[#d4d4d4] rounded-full" style={{ animation: 'loading-bar 1.5s infinite ease-in-out' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
       <Hero items={data.heroItems} />
       <div className="relative z-20 flex flex-col gap-10 pt-4">
         

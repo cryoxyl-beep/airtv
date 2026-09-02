@@ -5,7 +5,7 @@ import { searchMovies, searchTV } from '../api/tmdb';
 import { searchAnime } from '../api/anilist';
 import { RowCard } from '../components/Row';
 
-type FilterType = 'all' | 'movies' | 'series' | 'anime';
+type FilterType = '' | 'all' | 'movies' | 'series' | 'anime';
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();

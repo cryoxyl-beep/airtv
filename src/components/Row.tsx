@@ -44,7 +44,7 @@ const unobserveElement = (element: Element) => {
   getGlobalObserver()?.unobserve(element);
 };
 
-export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false }) => {
+export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
   const initialLogo = getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
   const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
@@ -151,7 +151,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
                 draggable={false}
                 loading="lazy"
               />
-              {item.source === 'anilist' && (
+              {item.source === 'anilist' && !hideTitleWithLogo && (
                 <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">
                   {item.title || item.name}
                 </p>
@@ -267,7 +267,7 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
         ) : (
           items.map((item, index) => {
             if (!item.backdrop_path) return null;
-            return <RowCard key={item.id} item={item} isTop10={isTop10} index={index} />;
+            return <RowCard key={item.id} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />;
           })
         )}
 
