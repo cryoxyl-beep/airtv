@@ -34,7 +34,7 @@ export default function Home() {
       let delayMs = 0;
       const safeFetch = async (promiseFn: () => Promise<any>) => {
         const currentDelay = delayMs;
-        delayMs += 300; // stagger requests by 300ms to avoid rate limits and connection drops
+        delayMs += 500; // stagger requests by 300ms to avoid rate limits and connection drops
         try {
           if (currentDelay > 0) {
             await new Promise(resolve => setTimeout(resolve, currentDelay));

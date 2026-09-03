@@ -29,7 +29,9 @@ const fetchTmdbImages = async (tmdbId, tmdbType) => {
 };
 
 
-const fetchAniList = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
+let anilistQueue: Promise<void> = Promise.resolve();
+
+const fetchAniListInternal = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
   const options = {
     method: 'POST',
     headers: {
@@ -48,7 +50,7 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
       if (!response.ok) {
         if (response.status === 429) {
           const retryAfter = response.headers.get('Retry-After');
-          const delay = retryAfter ? parseInt(retryAfter) * 1000 : (i + 1) * 1000;
+          const delay = retryAfter ? parseInt(retryAfter) * 1000 : (i + 1) * 1500;
           await sleep(delay);
           continue;
         }
@@ -56,10 +58,28 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
       }
       return await response.json();
     } catch (e: any) {
+      // If it's a network error (often a CORS error hiding a 429), back off heavily
       if (i === retries - 1) throw e;
-      await sleep((i + 1) * 1000);
+      await sleep((i + 1) * 1500);
     }
   }
+};
+
+const fetchAniList = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    anilistQueue = anilistQueue.then(async () => {
+      try {
+        const res = await fetchAniListInternal(query, variables, retries);
+        resolve(res);
+      } catch (e) {
+        reject(e);
+      }
+      // Delay to respect AniList 90 req/min limit (~666ms per req)
+      await sleep(750); 
+    }).catch(async () => {
+      await sleep(750);
+    });
+  });
 };
 
 const normalizeAniListToTmdb = async (media: any): Promise<any> => {
@@ -139,7 +159,13 @@ export const fetchTrendingAnime = async (perPage = 10) => {
   `;
   try {
     const data = await fetchAniList(query, { perPage });
-    const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
+        const mediaItems = data.data?.Page?.media || [];
+    const results = [];
+    for (const item of mediaItems) {
+      results.push(await normalizeAniListToTmdb(item));
+      // Add a tiny delay to prevent overwhelming TMDB connections
+      await sleep(25);
+    }
     return { results: results.filter(Boolean) };
   } catch (e) {
     console.error('fetchTrendingAnime failed:', e);
@@ -170,7 +196,13 @@ export const fetchNewlyAddedAnime = async (perPage = 10) => {
   `;
   try {
     const data = await fetchAniList(query, { perPage });
-    const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
+        const mediaItems = data.data?.Page?.media || [];
+    const results = [];
+    for (const item of mediaItems) {
+      results.push(await normalizeAniListToTmdb(item));
+      // Add a tiny delay to prevent overwhelming TMDB connections
+      await sleep(25);
+    }
     return { results: results.filter(Boolean) };
   } catch (e) {
     console.error('fetchNewlyAddedAnime failed:', e);
@@ -246,7 +278,13 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
   `;
   try {
     const data = await fetchAniList(query, { genre, perPage });
-    const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
+        const mediaItems = data.data?.Page?.media || [];
+    const results = [];
+    for (const item of mediaItems) {
+      results.push(await normalizeAniListToTmdb(item));
+      // Add a tiny delay to prevent overwhelming TMDB connections
+      await sleep(25);
+    }
     return { results: results.filter(Boolean) };
   } catch (e) {
     console.error(`fetchAnimeByGenre failed for ${genre}:`, e);
@@ -277,7 +315,13 @@ export const searchAnime = async (search: string, perPage = 20) => {
   `;
   try {
     const data = await fetchAniList(query, { search, perPage });
-    const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));
+        const mediaItems = data.data?.Page?.media || [];
+    const results = [];
+    for (const item of mediaItems) {
+      results.push(await normalizeAniListToTmdb(item));
+      // Add a tiny delay to prevent overwhelming TMDB connections
+      await sleep(25);
+    }
     return { results: results.filter(Boolean) };
   } catch (e) {
     console.error(`searchAnime failed for ${search}:`, e);

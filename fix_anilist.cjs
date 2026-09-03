@@ -1,15 +1,24 @@
 const fs = require('fs');
-let content = fs.readFileSync('src/api/anilist.ts', 'utf8');
-const lines = content.split('\n');
+let code = fs.readFileSync('src/api/anilist.ts', 'utf-8');
 
-// Line 151 (0-indexed 150) should be: return { results: await deduplicateAnimeList(results.filter(Boolean)) };
-if (lines[150].includes('return { results: results.filter(Boolean) };')) {
-  lines[150] = lines[150].replace('return { results: results.filter(Boolean) };', 'return { results: await deduplicateAnimeList(results.filter(Boolean)) };');
+// Replace Promise.all mappings with a sequential or chunked approach
+const replacements = [
+  {
+    from: "const results = await Promise.all((data.data?.Page?.media || []).map(normalizeAniListToTmdb));",
+    to: `    const mediaItems = data.data?.Page?.media || [];
+    const results = [];
+    for (const item of mediaItems) {
+      results.push(await normalizeAniListToTmdb(item));
+      // Add a tiny delay to prevent overwhelming TMDB connections
+      await sleep(25);
+    }`
+  }
+];
+
+let replaced = code;
+for (const r of replacements) {
+  // Use replace with global flag if needed, or just split/join since they are multiple occurrences
+  replaced = replaced.split(r.from).join(r.to);
 }
 
-// Line 438 (0-indexed 437) should be: return { results: results.filter(Boolean) };
-if (lines[437].includes('return { results: await deduplicateAnimeList(results.filter(Boolean)) };')) {
-  lines[437] = lines[437].replace('return { results: await deduplicateAnimeList(results.filter(Boolean)) };', 'return { results: results.filter(Boolean) };');
-}
-
-fs.writeFileSync('src/api/anilist.ts', lines.join('\n'), 'utf8');
+fs.writeFileSync('src/api/anilist.ts', replaced);
