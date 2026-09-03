@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Landing from './pages/Landing';
 import Home from './pages/Home';
 import WatchPage from './pages/WatchPage';
 import PlayerPage from './pages/PlayerPage';
@@ -41,7 +42,8 @@ export default function App() {
       <GlobalShortcuts />
       <Navbar />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/home" element={<Home />} />
         <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />
         <Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />
         <Route path="/watch/tv/:id/:season/:episode" element={<WatchPage type="tv" />} />
@@ -53,7 +55,7 @@ export default function App() {
         <Route path="/browse/:platform" element={<BrowsePage />} />
         <Route path="/search" element={<SearchPage />} />
         {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   );

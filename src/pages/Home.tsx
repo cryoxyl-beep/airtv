@@ -34,7 +34,7 @@ export default function Home() {
       let delayMs = 0;
       const safeFetch = async (promiseFn: () => Promise<any>) => {
         const currentDelay = delayMs;
-        delayMs += 150; // stagger requests by 150ms
+        delayMs += 300; // stagger requests by 300ms to avoid rate limits and connection drops
         try {
           if (currentDelay > 0) {
             await new Promise(resolve => setTimeout(resolve, currentDelay));
@@ -109,7 +109,7 @@ safeFetch(() => fetchTrending()),
         const filteredTop10 = (top10Data.results || []).filter((item: any) => {
           const title = item.title || item.name || '';
           return title !== 'Tagesschau' && title !== 'Paradise Hotel';
-        }).slice(0, 10);
+        });
         
         
         const mix = (tmdb: any[], anilist: any[]) => {
@@ -125,7 +125,7 @@ safeFetch(() => fetchTrending()),
         const newData = {
           heroItems: detailedHeroItems,
           trending: trendingData.results || [],
-          top10: filteredTop10,
+          top10: mix(filteredTop10, trendingAnimeData.results || []).slice(0, 10),
           action: mix(actionData.results || [], actionAnimeData.results || []),
           comedy: mix(comedyData.results || [], comedyAnimeData.results || []),
           romance: mix(romanceData.results || [], romanceAnimeData.results || []),

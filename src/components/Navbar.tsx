@@ -71,7 +71,7 @@ export default function Navbar() {
 
   const isSearchActive = isExpanded || inputValue || isFilterOpen || location.pathname === '/search';
 
-  const isImmersive = location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/') || location.pathname.startsWith('/play/');
+  const isImmersive = location.pathname === '/' || location.pathname.startsWith('/watch/') || location.pathname.startsWith('/anime/') || location.pathname.startsWith('/play/');
   
   if (isImmersive) return null;
   
@@ -115,7 +115,22 @@ export default function Navbar() {
         isVisible ? 'translate-y-0' : '-translate-y-full'
       }`}
     >
-      <div className="flex-1" />
+      <div className="flex-1 pointer-events-auto flex items-center h-12 md:h-14">
+        {(location.pathname === '/home' || location.pathname === '/search') && (
+          <h1 
+            onClick={() => {
+              if (location.pathname === '/home') {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              } else {
+                navigate('/home');
+              }
+            }}
+            className="text-[#d4d4d4] text-3xl md:text-4xl font-black lowercase tracking-tight drop-shadow-md cursor-pointer transition-transform hover:scale-105 select-none"
+          >
+            miyoro
+          </h1>
+        )}
+      </div>
       
       <div id="search-form-container" className="pointer-events-auto flex justify-end w-full md:w-auto relative">
         <form 

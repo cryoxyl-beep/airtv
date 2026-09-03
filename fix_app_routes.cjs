@@ -1,17 +1,19 @@
 const fs = require('fs');
-let app = fs.readFileSync('src/App.tsx', 'utf8');
+let code = fs.readFileSync('src/App.tsx', 'utf-8');
 
-// replace watch/tv/:id with both
-app = app.replace(
-  '<Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />',
-  '<Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />\n        <Route path="/watch/tv/:id/:season/:episode" element={<WatchPage type="tv" />} />'
+code = code.replace(
+  "import Home from './pages/Home';",
+  "import Landing from './pages/Landing';\nimport Home from './pages/Home';"
 );
 
-// replace anime/:id with both
-app = app.replace(
-  '<Route path="/anime/:id" element={<WatchPage type="anime" />} />',
-  '<Route path="/anime/:id" element={<WatchPage type="anime" />} />\n        <Route path="/anime/:id/:episode" element={<WatchPage type="anime" />} />'
+code = code.replace(
+  '<Route path="/" element={<Home />} />',
+  '<Route path="/" element={<Landing />} />\n        <Route path="/home" element={<Home />} />'
 );
 
-fs.writeFileSync('src/App.tsx', app);
-console.log('App routes updated');
+code = code.replace(
+  '<Navigate to="/" replace />',
+  '<Navigate to="/home" replace />'
+);
+
+fs.writeFileSync('src/App.tsx', code);
