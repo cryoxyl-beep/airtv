@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchTop10, IMAGE_BASE_URL_W500, fetchTrending } from '../api/tmdb';
 import { fetchTrendingAnime } from '../api/anilist';
 import { ChevronRight, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -78,10 +79,9 @@ export default function Landing() {
   const [wallPosters, setWallPosters] = useState<any[]>([]);
   const [showSplash, setShowSplash] = useState(true);
 
-  // We'll use a local state to toggle login view for now.
-  // In a real app, this would be derived from an AuthContext or Firebase.
-  const [isLoggedIn] = useState(false); 
-  const userProfile = { name: 'Santosh' };
+  const { currentUser, signInWithGoogle } = useAuth();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [authError, setAuthError] = useState('');
 
   useEffect(() => {
     // Quick 1-second splash for the landing page
@@ -121,6 +121,25 @@ export default function Landing() {
     };
     loadLandingData();
   }, []);
+
+  const handleGoogleLogin = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (isSigningIn) return;
+    
+    setIsSigningIn(true);
+    setAuthError('');
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      if (err.code === 'auth/popup-closed-by-user') {
+        setAuthError('Sign in cancelled.');
+      } else {
+        setAuthError('Unable to sign in with Google. Please try again.');
+      }
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   return (
     <div className="h-screen bg-black font-sans w-[100vw] overflow-hidden relative selection:bg-white/30">
@@ -170,36 +189,40 @@ export default function Landing() {
             className="w-full max-w-sm flex flex-col gap-8 border-t border-white/10 pt-8 mt-4"
           >
             {/* Account / Login Area */}
-            {isLoggedIn ? (
+            {currentUser ? (
               <div 
                 onClick={() => navigate('/home')}
                 className="flex items-center gap-4 group cursor-pointer w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:translate-x-2"
               >
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-white/40 transition-colors">
-                  <User className="w-5 h-5 text-white/70 group-hover:text-white" />
+                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-white/40 transition-colors shadow-lg">
+                  {currentUser.photoURL ? (
+                    <img src={currentUser.photoURL} alt={currentUser.displayName || 'User'} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-5 h-5 text-white/70 group-hover:text-white" />
+                  )}
                 </div>
                 <div>
-                  <h3 className="text-white font-medium text-lg tracking-wide">{userProfile.name}</h3>
+                  <h3 className="text-white font-medium text-lg tracking-wide">{currentUser.displayName || 'User'}</h3>
                   <p className="text-white/50 text-sm group-hover:text-white transition-colors flex items-center gap-1">
-                    Your Profile <ChevronRight className="w-3 h-3" />
+                    Continue into Miyoro <ChevronRight className="w-3 h-3 transform group-hover:translate-x-0.5 transition-transform" />
                   </p>
                 </div>
               </div>
             ) : (
-              <button 
-                onClick={(e) => {
-                  e.preventDefault();
-                  // Temporarily blocked per instructions
-                }}
-                className="text-left group flex flex-col gap-1 w-max cursor-not-allowed opacity-50 p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-out hover:translate-x-1"
-                disabled
-              >
-                <span className="text-white text-xl md:text-2xl font-semibold tracking-wide flex items-center gap-3">
-                  <GoogleIcon className="w-6 h-6 group-hover:scale-110 transition-transform duration-300" />
-                  Sign in with Google
-                </span>
-                <div className="h-[2px] w-0 bg-white group-hover:w-full transition-all duration-500 ease-out" />
-              </button>
+              <div className="flex flex-col gap-2">
+                <button 
+                  onClick={handleGoogleLogin}
+                  className={`text-left group flex flex-col gap-1 w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-out hover:translate-x-1 ${isSigningIn ? 'opacity-50 cursor-wait' : ''}`}
+                  disabled={isSigningIn}
+                >
+                  <span className="text-white text-xl md:text-2xl font-semibold tracking-wide flex items-center gap-3">
+                    <GoogleIcon className={`w-6 h-6 ${!isSigningIn && 'group-hover:scale-110'} transition-transform duration-300`} />
+                    {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+                  </span>
+                  <div className="h-[2px] w-0 bg-white group-hover:w-full transition-all duration-500 ease-out" />
+                </button>
+                {authError && <p className="text-red-400 text-sm ml-1 opacity-90">{authError}</p>}
+              </div>
             )}
 
             {/* Guest Entry */}

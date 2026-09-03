@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, X, SlidersHorizontal } from 'lucide-react';
+import { Search, X, SlidersHorizontal, LogOut, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 
 type FilterType = '' | 'all' | 'movies' | 'series' | 'anime';
 
 export default function Navbar() {
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -132,7 +134,8 @@ export default function Navbar() {
         )}
       </div>
       
-      <div id="search-form-container" className="pointer-events-auto flex justify-end w-full md:w-auto relative">
+      <div className="flex items-center gap-4 pointer-events-auto">
+      <div id="search-form-container" className="flex justify-end w-full md:w-auto relative">
         <form 
           onSubmit={handleSubmit}
           className={`relative bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md transition-all duration-300 ease-out rounded-full focus-within:bg-[#252525]/90 focus-within:border-white/30 ${isSearchActive ? 'w-full sm:w-[450px] lg:w-[500px]' : 'w-[100px] md:w-[150px]'} hover:shadow-2xl z-20`}
@@ -199,6 +202,26 @@ export default function Navbar() {
             <FilterButton type="anime" label="Anime" />
           </div>
         </div>
+      </div>
+      {currentUser && (
+        <div className="relative group flex items-center">
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden border border-white/20 hover:border-white/50 transition-colors shadow-lg cursor-pointer flex items-center justify-center bg-[#1A1A1A]">
+            {currentUser.photoURL ? (
+              <img src={currentUser.photoURL} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <User className="w-5 h-5 text-white/70" />
+            )}
+          </div>
+          <div className="absolute right-0 top-full mt-2 w-40 bg-[#1A1A1A]/95 border border-white/10 shadow-2xl backdrop-blur-xl rounded-xl overflow-hidden opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto transition-all duration-200 origin-top-right">
+            <button
+              onClick={logout}
+              className="w-full px-4 py-3 text-left text-white/80 hover:text-white hover:bg-white/10 transition-colors flex items-center gap-3 text-sm font-medium"
+            >
+              <LogOut className="w-4 h-4" /> Sign Out
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
