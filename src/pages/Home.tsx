@@ -34,7 +34,7 @@ export default function Home() {
       let delayMs = 0;
       const safeFetch = async (promiseFn: () => Promise<any>) => {
         const currentDelay = delayMs;
-        delayMs += 500; // stagger requests by 300ms to avoid rate limits and connection drops
+        delayMs += 0; // Removed stagger to fix slow load // stagger requests by 300ms to avoid rate limits and connection drops
         try {
           if (currentDelay > 0) {
             await new Promise(resolve => setTimeout(resolve, currentDelay));
@@ -62,12 +62,12 @@ safeFetch(() => fetchTrending()),
           safeFetch(() => fetchByGenre(10751)), // Family
           safeFetch(() => fetchByGenre(80)), // Crime
           safeFetch(() => fetchByGenre(18)), // Drama
-          safeFetch(() => fetchTrendingAnime(10)),
-          safeFetch(() => fetchNewlyAddedAnime(10)),
-          safeFetch(() => fetchAnimeByGenre('Romance', 10)),
-          safeFetch(() => fetchAnimeByGenre('Action', 10)),
-          safeFetch(() => fetchAnimeByGenre('Comedy', 10)),
-          safeFetch(() => fetchAnimeByGenre('Drama', 10))
+          safeFetch(() => fetchTrendingAnime(15, true)),
+          safeFetch(() => fetchNewlyAddedAnime(15, true)),
+          safeFetch(() => fetchAnimeByGenre('Romance', 15, true)),
+          safeFetch(() => fetchAnimeByGenre('Action', 15, true)),
+          safeFetch(() => fetchAnimeByGenre('Comedy', 15, true)),
+          safeFetch(() => fetchAnimeByGenre('Drama', 15, true))
 ]);
         
         

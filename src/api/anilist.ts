@@ -75,9 +75,9 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
         reject(e);
       }
       // Delay to respect AniList 90 req/min limit (~666ms per req)
-      await sleep(750); 
+      await sleep(50); 
     }).catch(async () => {
-      await sleep(750);
+      await sleep(50);
     });
   });
 };
