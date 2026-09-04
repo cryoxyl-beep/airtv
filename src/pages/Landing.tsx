@@ -94,7 +94,7 @@ export default function Landing() {
       try {
         const [trendingRes, animeRes, moviesRes] = await Promise.all([
           fetchTop10(),
-          fetchTrendingAnime(20),
+          fetchTrendingAnime(20, true),
           fetchTrending()
         ]);
         

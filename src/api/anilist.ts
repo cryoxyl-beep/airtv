@@ -82,7 +82,7 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
   });
 };
 
-const normalizeAniListToTmdb = async (media: any): Promise<any> => {
+const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = false): Promise<any> => {
   if (!media) return null;
   
   const mapping = await resolveAnimeMapping(media.id);
@@ -99,7 +99,7 @@ const normalizeAniListToTmdb = async (media: any): Promise<any> => {
   let backdrop_path = media.bannerImage || media.coverImage?.extraLarge;
   
   // Override with TMDB images if mapped
-  if (tmdbId && tmdbType) {
+  if (!skipTmdbImages && tmdbId && tmdbType) {
     const tmdbImages = await fetchTmdbImages(tmdbId, tmdbType);
     if (tmdbImages) {
       if (tmdbImages.poster_path) poster_path = tmdbImages.poster_path;
@@ -136,7 +136,7 @@ const normalizeAniListToTmdb = async (media: any): Promise<any> => {
   };
 };
 
-export const fetchTrendingAnime = async (perPage = 10) => {
+export const fetchTrendingAnime = async (perPage = 10, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($perPage: Int) {
@@ -162,9 +162,11 @@ export const fetchTrendingAnime = async (perPage = 10) => {
         const mediaItems = data.data?.Page?.media || [];
     const results = [];
     for (const item of mediaItems) {
-      results.push(await normalizeAniListToTmdb(item));
-      // Add a tiny delay to prevent overwhelming TMDB connections
-      await sleep(25);
+      results.push(await normalizeAniListToTmdb(item, skipTmdbImages));
+      // Add a tiny delay to prevent overwhelming TMDB connections if fetching images
+      if (!skipTmdbImages) {
+        await sleep(25);
+      }
     }
     return { results: results.filter(Boolean) };
   } catch (e) {
@@ -173,7 +175,7 @@ export const fetchTrendingAnime = async (perPage = 10) => {
   }
 };
 
-export const fetchNewlyAddedAnime = async (perPage = 10) => {
+export const fetchNewlyAddedAnime = async (perPage = 10, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($perPage: Int) {
@@ -199,9 +201,11 @@ export const fetchNewlyAddedAnime = async (perPage = 10) => {
         const mediaItems = data.data?.Page?.media || [];
     const results = [];
     for (const item of mediaItems) {
-      results.push(await normalizeAniListToTmdb(item));
-      // Add a tiny delay to prevent overwhelming TMDB connections
-      await sleep(25);
+      results.push(await normalizeAniListToTmdb(item, skipTmdbImages));
+      // Add a tiny delay to prevent overwhelming TMDB connections if fetching images
+      if (!skipTmdbImages) {
+        await sleep(25);
+      }
     }
     return { results: results.filter(Boolean) };
   } catch (e) {
@@ -255,7 +259,7 @@ export const fetchAnimeDetails = async (id: number) => {
   }
 };
 
-export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
+export const fetchAnimeByGenre = async (genre: string, perPage = 20, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($genre: String, $perPage: Int) {
@@ -281,9 +285,11 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
         const mediaItems = data.data?.Page?.media || [];
     const results = [];
     for (const item of mediaItems) {
-      results.push(await normalizeAniListToTmdb(item));
-      // Add a tiny delay to prevent overwhelming TMDB connections
-      await sleep(25);
+      results.push(await normalizeAniListToTmdb(item, skipTmdbImages));
+      // Add a tiny delay to prevent overwhelming TMDB connections if fetching images
+      if (!skipTmdbImages) {
+        await sleep(25);
+      }
     }
     return { results: results.filter(Boolean) };
   } catch (e) {
@@ -292,7 +298,7 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20) => {
   }
 };
 
-export const searchAnime = async (search: string, perPage = 20) => {
+export const searchAnime = async (search: string, perPage = 20, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($search: String, $perPage: Int) {
@@ -318,9 +324,11 @@ export const searchAnime = async (search: string, perPage = 20) => {
         const mediaItems = data.data?.Page?.media || [];
     const results = [];
     for (const item of mediaItems) {
-      results.push(await normalizeAniListToTmdb(item));
-      // Add a tiny delay to prevent overwhelming TMDB connections
-      await sleep(25);
+      results.push(await normalizeAniListToTmdb(item, skipTmdbImages));
+      // Add a tiny delay to prevent overwhelming TMDB connections if fetching images
+      if (!skipTmdbImages) {
+        await sleep(25);
+      }
     }
     return { results: results.filter(Boolean) };
   } catch (e) {
