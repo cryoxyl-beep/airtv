@@ -79,13 +79,13 @@ export default function PlatformRow() {
   };
 
   return (
-    <div className="relative mb-8 group/row">
+    <div className="relative group/row">
       <div className="flex items-center justify-center mb-2">
         <h2 className="text-2xl font-bold text-white tracking-wide">Browse by Platform</h2>
       </div>
       <div
         ref={rowRef}
-        className={`flex items-center lg:justify-center overflow-x-auto scrollbar-hide gap-6 py-8 ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+        className={`flex items-center lg:justify-center overflow-x-auto scrollbar-hide gap-6 py-4 ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}

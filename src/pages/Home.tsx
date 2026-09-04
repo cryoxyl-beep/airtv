@@ -169,7 +169,7 @@ safeFetch(() => fetchTrending()),
         </div>
       )}
       <Hero items={data.heroItems} />
-      <div className="relative z-20 flex flex-col gap-10 pt-4">
+      <div className="relative z-20 flex flex-col gap-4 pt-4">
         
         <Row 
           title="Trending Now" 

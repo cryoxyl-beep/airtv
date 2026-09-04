@@ -236,14 +236,14 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
   };
 
   return (
-    <div className="relative mb-8 group/row">
+    <div className="relative group/row">
       <div className="flex items-center justify-between pl-12 pr-12 mb-2">
         <h2 className="text-2xl font-bold text-white tracking-wide">{title}</h2>
       </div>
 
       <div
         ref={rowRef}
-        className={`flex items-center overflow-x-auto scrollbar-hide ${isTop10 ? 'gap-8 py-4' : 'gap-4 py-8'} ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+        className={`flex items-center overflow-x-auto scrollbar-hide ${isTop10 ? 'gap-8 py-4' : 'gap-4 py-4'} ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}
