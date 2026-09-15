@@ -62,12 +62,12 @@ safeFetch(() => fetchTrending()),
           safeFetch(() => fetchByGenre(10751)), // Family
           safeFetch(() => fetchByGenre(80)), // Crime
           safeFetch(() => fetchByGenre(18)), // Drama
-          safeFetch(() => fetchTrendingAnime(15, true)),
-          safeFetch(() => fetchNewlyAddedAnime(15, true)),
-          safeFetch(() => fetchAnimeByGenre('Romance', 15, true)),
-          safeFetch(() => fetchAnimeByGenre('Action', 15, true)),
-          safeFetch(() => fetchAnimeByGenre('Comedy', 15, true)),
-          safeFetch(() => fetchAnimeByGenre('Drama', 15, true))
+          safeFetch(() => fetchTrendingAnime(15)),
+          safeFetch(() => fetchNewlyAddedAnime(15)),
+          safeFetch(() => fetchAnimeByGenre('Romance', 15)),
+          safeFetch(() => fetchAnimeByGenre('Action', 15)),
+          safeFetch(() => fetchAnimeByGenre('Comedy', 15)),
+          safeFetch(() => fetchAnimeByGenre('Drama', 15))
 ]);
         
         
