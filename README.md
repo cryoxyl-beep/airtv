@@ -1,170 +1,138 @@
-# 🎬 Miyoro
+<div align="center">
 
-> **Watch. Whatever. You Want.**
+# **m i y o r o**
+### *Watch. Whatever. You Want.*
 
-[![Live Demo](https://img.shields.io/badge/Demo-miyoro.vercel.app-E50914?style=for-the-badge&logo=vercel&logoColor=white)](https://miyoro.vercel.app)
-[![React 19](https://img.shields.io/badge/React%2019-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](#-tech-stack)
-[![TypeScript](https://img.shields.io/badge/TypeScript%205.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](#-tech-stack)
-[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](#-tech-stack)
-[![Vite](https://img.shields.io/badge/Vite%206-646CFF?style=for-the-badge&logo=vite&logoColor=white)](#-tech-stack)
+<p align="center">
+  <a href="https://miyoro.vercel.app">
+    <img src="https://img.shields.io/badge/LIVE_PREVIEW-miyoro.vercel.app-FFFFFF?style=for-the-badge&logo=vercel&logoColor=black&labelColor=0A0A0A" alt="Live Demo" />
+  </a>
+  <img src="https://img.shields.io/badge/STATUS-ACTIVE_DEVELOPMENT-E50914?style=for-the-badge&labelColor=0A0A0A" alt="Status" />
+  <img src="https://img.shields.io/badge/LICENSE-MIT-888888?style=for-the-badge&labelColor=0A0A0A" alt="License" />
+</p>
 
----
-
-## 🌐 Live Application
-Experience Miyoro directly in production:  
-👉 **[https://miyoro.vercel.app](https://miyoro.vercel.app)**
-
----
-
-## 📖 Description
-
-**Miyoro** is a modern, ultra-responsive streaming and media discovery web application built for movie lovers, series bingers, and anime enthusiasts. Designed with a sleek dark aesthetic and smooth micro-interactions, Miyoro seamlessly unifies cinematic content from multiple global sources into a single fluid experience.
-
-Featuring real-time catalog sync with **The Movie Database (TMDB)** and the **AniList GraphQL API**, Miyoro bridges the gap between western cinema and anime using an intelligent cross-ID mapping layer (Fribb). From instant universal search (`⌘K` / `Ctrl+K`) to responsive drag-scroll carousels, genre-specific explorations, platform filtering, and dedicated video playback views with season and episode selectors, Miyoro delivers an effortless entertainment experience.
-
-### 🏷️ Description Tags
-`#streaming` `#movies` `#tv-series` `#anime` `#tmdb` `#anilist` `#video-player` `#cinematic-ui` `#entertainment` `#media-platform` `#responsive-design` `#react19` `#typescript` `#vite` `#tailwind-css` `#framer-motion`
+<p align="center">
+  <img src="https://img.shields.io/badge/ streaming -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ cinema -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ television -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ anime -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ tmdb -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ anilist -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ dark--ui -0F0F0F?style=flat-square&logoColor=white" />
+  <img src="https://img.shields.io/badge/ media--hub -0F0F0F?style=flat-square&logoColor=white" />
+</p>
 
 ---
 
-## 🖼️ Interface Previews & Walkthrough
+### 🌐 [**Launch Application — miyoro.vercel.app ↗**](https://miyoro.vercel.app)
 
-### 1. Landing Gateway (`/`)
-The entry gate to Miyoro featuring an animated, cinematic floating poster wall displaying trending cinema and anime titles. Includes brand messaging, seamless Google Authentication, and instant one-click Guest access.
+</div>
 
-![Miyoro Landing Page](1.png)
+<br />
 
----
+## **Overview**
 
-### 2. Main Feed & Hero Spotlight (`/home`)
-The primary browse feed welcomes users with a dynamic full-bleed Hero Billboard highlighting trending movies, anime, and series. Features direct playback triggers, rich info overlays, a live thumbnail carousel selector, quick interaction controls (favorite, bookmark, watchlist), and a quick-action top navbar with universal `⌘K` search.
+**Miyoro** is a minimalist, high-performance streaming and media discovery platform crafted for cinema, television, and anime. Engineered around a zero-clutter dark interface, Miyoro unifies global entertainment catalogs into a single fluid browsing and playback experience.
 
-![Miyoro Home Spotlight](2.png)
+By pairing real-time metadata from **The Movie Database (TMDB)** with the **AniList GraphQL API** through an automated cross-ID resolution layer (**Fribb**), Miyoro bridges western cinema and seasonal anime with official studio artwork, title logos, and episode tracking.
 
----
+> [!IMPORTANT]
+> **Active Development & Playback Roadmap**  
+> Miyoro is currently under **active development**. The media player architecture is actively being upgraded to introduce **Native Video Playback** (direct HLS/DASH streaming with custom controls, subtitle tracks, and quality switching) while **retaining standard multi-server embeds** for maximum reliability and fallback coverage.
 
-### 3. Trending Rails & Curated Content (Continuation of `/home`)
-Continuing down the home feed, users encounter high-impact numbered Top 10 countdown carousels followed by curated recommendation rails. Every card is rendered with official title logos, backdrop artwork, and smooth drag-to-scroll navigation with optimized vertical rhythm.
+<br />
 
-![Miyoro Home Content Rows](3.png)
+## **Tech Stack**
 
----
+<div align="center">
 
-## 🚀 Key Features
+![React 19](https://img.shields.io/badge/React_19-0A0A0A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![TypeScript](https://img.shields.io/badge/TypeScript-0A0A0A?style=for-the-badge&logo=typescript&logoColor=3178C6)
+![Vite 6](https://img.shields.io/badge/Vite_6-0A0A0A?style=for-the-badge&logo=vite&logoColor=646CFF)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_v4-0A0A0A?style=for-the-badge&logo=tailwindcss&logoColor=38BDF8)
+![Motion](https://img.shields.io/badge/Motion-0A0A0A?style=for-the-badge&logo=framer&logoColor=FFFFFF)
+![Firebase](https://img.shields.io/badge/Firebase-0A0A0A?style=for-the-badge&logo=firebase&logoColor=FFCA28)
+![TMDB API](https://img.shields.io/badge/TMDB_API-0A0A0A?style=for-the-badge&logo=themoviedatabase&logoColor=01B4E4)
+![AniList GraphQL](https://img.shields.io/badge/AniList_GraphQL-0A0A0A?style=for-the-badge&logo=anilist&logoColor=02A9FF)
 
-- **🌟 Dynamic Hero Banner & Cinematic Wall**: Curated billboard spotlighting top trending releases with direct trailer and playback entry points.
-- **🎌 Dual Cinema & Anime Ecosystem**:
-  - Live TMDB integration for trending movies, top 10 rankings, and genre classifications.
-  - Live AniList GraphQL integration for seasonal, popular, and trending anime releases.
-  - Automatic Fribb Cross-Mapping to match AniList IDs with TMDB/TVDB backdrops, titles, and episode metadata.
-- **⚡ Instant Quick-Search (`⌘K` / `Ctrl+K`)**: Fast universal search overlay supporting real-time filtering across movies, TV shows, and anime.
-- **📺 Dedicated Watch & Player Views**:
-  - Rich media detail pages including synopsis, ratings, trailers, cast info, and similar recommendations.
-  - Interactive season/episode selector with multi-provider video player embed capabilities.
-- **🏷️ Browse by Platform**: Quick-filter content catalog by favorite platforms (Netflix, Prime Video, Disney+, Apple TV+, Crunchyroll, HBO Max, and more).
-- **🔒 Flexible Authentication**: Seamless sign-in powered by Firebase Authentication with Google Sign-In and one-click Guest access.
-- **🎨 Modern Dark UI / UX**: Compact vertical rhythm, buttery-smooth drag-to-scroll carousels, backdrop logo overlays, and responsive mobile-first layouts.
+</div>
 
----
+<br />
 
-## 🛠️ Tech Stack & Badges
+## **Interface Walkthrough**
 
-### Core Technologies
-| Category | Technologies | Badges / Tags |
-| :--- | :--- | :--- |
-| **Framework & UI** | React 19, TypeScript | `![React](https://img.shields.io/badge/React%2019-20232A?style=flat-square&logo=react&logoColor=61DAFB)` `![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)` |
-| **Styling & Motion** | Tailwind CSS v4, Motion (Framer Motion) | `![Tailwind](https://img.shields.io/badge/Tailwind_CSS_v4-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)` `![Motion](https://img.shields.io/badge/Motion-0055FF?style=flat-square&logo=framer&logoColor=white)` |
-| **Build & Bundler** | Vite 6 | `![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)` |
-| **Icons** | Lucide React | `![Lucide](https://img.shields.io/badge/Lucide_Icons-F56565?style=flat-square&logo=feather&logoColor=white)` |
-| **Authentication & DB**| Firebase Auth, Firestore | `![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat-square&logo=firebase&logoColor=black)` |
-| **Media Metadata** | TMDB API, AniList GraphQL, Fribb Mappings | `![TMDB](https://img.shields.io/badge/TMDB_API-01B4E4?style=flat-square&logo=themoviedatabase&logoColor=white)` `![AniList](https://img.shields.io/badge/AniList_GraphQL-02A9FF?style=flat-square&logo=anilist&logoColor=white)` |
+### **01 — Entry & Authentication (`/`)**
+The root landing experience welcomes users with an animated, multi-column floating poster wall curated from trending films and anime. Designed for zero-friction onboarding, users can authenticate via Google Sign-In or jump straight into the catalog using instant Guest access.
 
-### Tech Stack Tags
-```text
-[React 19] [TypeScript] [Vite] [Tailwind CSS v4] [Motion] [Lucide Icons] [Firebase] [TMDB API] [AniList API] [Fribb Anime Database] [Express]
-```
+<p align="center">
+  <img src="1.png" alt="Miyoro Landing Screen" width="100%" />
+</p>
 
----
+<br />
 
-## 📂 Project Structure
+### **02 — Hero Billboard & Discovery (`/home`)**
+Upon entering `/home`, a full-bleed cinematic spotlight showcases top trending releases with official studio title treatment, backdrop grading, interactive poster-strip navigation, watchlist quick actions, and a minimalist top bar featuring instant `⌘K` command search.
 
-```text
-├── public/                  # Static assets and media files
-├── 1.png                    # Landing page preview
-├── 2.png                    # Home spotlight preview
-├── 3.png                    # Home content rails preview
-├── src/
-│   ├── api/                 # API connectors & resolvers
-│   │   ├── anilist.ts       # AniList GraphQL queries, queue & Fribb normalization
-│   │   └── tmdb.ts          # TMDB v3 API endpoints, genres & logo resolvers
-│   ├── components/          # Reusable UI components
-│   │   ├── Hero.tsx         # Spotlight billboard carousel
-│   │   ├── Navbar.tsx       # Navigation, quick-search trigger & profile controls
-│   │   ├── PlatformRow.tsx  # Platform-specific streaming provider rail
-│   │   └── Row.tsx          # Horizontal swipeable/draggable content carousels
-│   ├── contexts/            # React context providers (AuthContext, etc.)
-│   ├── hooks/               # Custom hooks (scroll restoration, debounce, etc.)
-│   ├── pages/               # Application view routes
-│   │   ├── Landing.tsx      # Welcome screen with animated poster wall & auth
-│   │   ├── Home.tsx         # Primary browse feed (trending, top 10, genres)
-│   │   ├── WatchPage.tsx    # Media detail hub, cast, trailers & episodes
-│   │   ├── PlayerPage.tsx   # Immersive media player view
-│   │   ├── BrowsePage.tsx   # Platform & category explorer
-│   │   └── SearchPage.tsx   # Full-page search view
-│   ├── App.tsx              # Router configuration and global keyboard shortcuts
-│   ├── index.css            # Tailwind CSS styling and custom animation directives
-│   └── main.tsx             # React application entry point
-├── package.json             # Scripts and project dependencies
-├── tsconfig.json            # TypeScript configuration
-└── vite.config.ts           # Vite development and build configuration
-```
+<p align="center">
+  <img src="2.png" alt="Miyoro Home Hero Spotlight" width="100%" />
+</p>
 
----
+<br />
 
-## 💻 Getting Started Locally
+### **03 — Ranked Rails & Curated Collections (`/home` cont.)**
+Scrolling down `/home` reveals precision-spaced horizontal carousels, starting with the outlined Top 10 Ranked Countdown followed by personalized and genre-blended rows. Every media card dynamically resolves high-contrast title logos over widescreen backdrops with smooth drag-to-scroll physics.
 
-### Prerequisites
-- Node.js (version 18+ recommended)
-- npm or pnpm or yarn
+<p align="center">
+  <img src="3.png" alt="Miyoro Home Content Rows" width="100%" />
+</p>
 
-### 1. Clone the repository
+<br />
+
+## **Core Capabilities**
+
+- **Unified Cinema & Anime Engine** — Real-time synchronization between TMDB v3 and AniList GraphQL, normalized via Fribb ID mapping so anime entries receive full widescreen backdrops, clearlogos, and season structures.
+- **Hybrid Player Architecture *(In Progress)*** — Transitioning to native stream playback with custom UI controls while maintaining full support for standard embed providers.
+- **Command Search (`⌘K`)** — Instant keyboard-first search modal querying movies, series, and anime simultaneously.
+- **Platform Hubs** — Dedicated provider filtering across Netflix, Prime Video, Disney+, Apple TV+, Max, and Crunchyroll.
+- **Fluid Spatial Rhythm** — Custom drag-scroll carousels, intersection-observed lazy logo resolution, and zero-jank route scroll restoration.
+
+<br />
+
+## **Local Development**
+
 ```bash
+# 1. Clone repository
 git clone https://github.com/your-username/miyoro.git
 cd miyoro
-```
 
-### 2. Install dependencies
-```bash
+# 2. Install dependencies
 npm install
-```
 
-### 3. Environment Configuration
-Create a `.env` file in the root directory and supply your TMDB API read access token (or key) if desired:
-```env
-VITE_TMDB_ACCESS_TOKEN=your_tmdb_bearer_token_here
-```
-
-### 4. Run development server
-```bash
+# 3. Start development server (http://localhost:3000)
 npm run dev
-```
-Open your browser at `http://localhost:3000` to start exploring.
 
-### 5. Build for production
-```bash
+# 4. Production build
 npm run build
-npm run preview
 ```
 
----
+<br />
 
-## 🌐 API Attribution & Credits
+## **Architecture**
 
-- **[The Movie Database (TMDB)](https://www.themoviedb.org/)**: Movie and TV metadata, backdrops, cast info, and official platform logos.
-- **[AniList](https://anilist.co/)**: Comprehensive Anime database and GraphQL API.
-- **[Fribb Anime Lists](https://github.com/Fribb/anime-lists)**: Anime-to-TMDB/TVDB cross-reference database for unified metadata.
+```text
+miyoro/
+├── 1.png / 2.png / 3.png    # Interface preview assets
+├── src/
+│   ├── api/                 # TMDB v3, AniList GraphQL & Fribb cross-mapping
+│   ├── components/          # Hero billboard, draggable rows, navbar & player UI
+│   ├── contexts/            # Firebase Auth & user session state
+│   ├── hooks/               # Scroll restoration & keyboard shortcut hooks
+│   └── pages/               # Landing (/), Home (/home), Watch, Player, Browse & Search
+└── vite.config.ts           # Build & bundler configuration
+```
 
----
+<br />
 
-## 📄 License
-This project is open-source and available under the [MIT License](LICENSE).
+<div align="center">
+  <sub>Built for seamless entertainment. Powered by TMDB, AniList & Fribb.</sub>
+</div>
