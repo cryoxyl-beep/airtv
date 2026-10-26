@@ -1,7 +1,6 @@
 import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
-import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo } from '../api/tmdb';
+import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo, hasCachedLogoEntry } from '../api/tmdb';
 
 interface RowProps {
   title: string;
@@ -28,7 +27,7 @@ const getGlobalObserver = () => {
           }
         });
       },
-      { rootMargin: "200px" }
+      { rootMargin: "1200px" }
     );
   }
   return globalObserver;
@@ -45,43 +44,45 @@ const unobserveElement = (element: Element) => {
 };
 
 export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
+  const alreadyCached = hasCachedLogoEntry(item);
   const initialLogo = getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
-  const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
+  const [loadingLogo, setLoadingLogo] = useState(!alreadyCached);
   const cardRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(index < 8);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    
-    if (cardRef.current) {
-      observeElement(cardRef.current, () => {
+    if (isVisible || alreadyCached) return;
+    const el = cardRef.current;
+    if (el) {
+      observeElement(el, () => {
         setIsVisible(true);
       });
     }
     return () => {
-      if (cardRef.current) {
-        unobserveElement(cardRef.current);
+      if (el) {
+        unobserveElement(el);
       }
     };
-  }, []);
+  }, [isVisible, alreadyCached]);
 
   useEffect(() => {
+    if (hasCachedLogoEntry(item)) {
+      setLogo(getCachedLogo(item));
+      setLoadingLogo(false);
+      return;
+    }
+
     if (!isVisible) return;
-    
-    // If we already synchronously loaded the logo, we don't need to fetch it again
-    if (logo) return;
 
     let mounted = true;
     const getLogo = async () => {
-      setLoadingLogo(true);
       try {
         const foundLogo = await resolveLogo(item);
         if (!mounted) return;
-        if (foundLogo) {
-          setLogo(foundLogo);
-        }
+        setLogo(foundLogo);
       } catch (e) {
         // ignore
       } finally {
@@ -92,7 +93,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
     return () => {
       mounted = false;
     };
-  }, [item, isVisible, logo]);
+  }, [item, isVisible]);
 
   return (
     <div
@@ -134,7 +135,8 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
           src={(item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL_W500}${item.backdrop_path}`)}
           alt={item.title || item.name}
           className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
-          loading="lazy"
+          loading={index < 6 ? "eager" : "lazy"}
+          decoding="async"
           draggable={false}
         />
 
@@ -149,7 +151,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
                 alt={item.title || item.name}
                 className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
                 draggable={false}
-                loading="lazy"
+                decoding="async"
               />
               {item.source === 'anilist' && !hideTitleWithLogo && (
                 <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">

@@ -53,7 +53,8 @@ const CinematicPosterWall = ({ posters }: { posters: any[] }) => {
                       src={poster.poster_path.startsWith('http') ? poster.poster_path : `${IMAGE_BASE_URL_W500}${poster.poster_path}`} 
                       alt={poster.title || 'Poster'} 
                       className="w-full h-full object-cover"
-                      loading="lazy"
+                      loading="eager"
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full bg-white/5" />
@@ -84,8 +85,8 @@ export default function Landing() {
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    // Quick 1-second splash for the landing page
-    const timer = setTimeout(() => setShowSplash(false), 1200);
+    // Quick splash for the landing page
+    const timer = setTimeout(() => setShowSplash(false), 450);
     return () => clearTimeout(timer);
   }, []);
 

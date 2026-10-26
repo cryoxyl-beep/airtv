@@ -3,7 +3,7 @@ import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
 import { fetchTrendingAnime, fetchNewlyAddedAnime, fetchAnimeByGenre } from '../api/anilist';
-import { fetchTrending, fetchTop10, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre } from '../api/tmdb';
+import { fetchTrending, fetchTop10, fetchAllTimeFavorites, fetchDetails, fetchByGenre, fetchTVByGenre, preloadLogosForItems } from '../api/tmdb';
 
 let cachedHomeData: any = null;
 
@@ -31,14 +31,8 @@ export default function Home() {
     }
 
     const loadData = async () => {
-      let delayMs = 0;
       const safeFetch = async (promiseFn: () => Promise<any>) => {
-        const currentDelay = delayMs;
-        delayMs += 0; // Removed stagger to fix slow load // stagger requests by 300ms to avoid rate limits and connection drops
         try {
-          if (currentDelay > 0) {
-            await new Promise(resolve => setTimeout(resolve, currentDelay));
-          }
           return await promiseFn();
         } catch (e) {
           console.error("Safe fetch failed:", e);
@@ -51,7 +45,7 @@ export default function Home() {
           trendingData, top10Data,
           actionData, comedyData, romanceData, scifiData, horrorData,
           sitcomData, familyData, crimeData, dramaData, trendingAnimeData, newlyAddedAnimeData, romanceAnimeData, actionAnimeData, comedyAnimeData, dramaAnimeData] = await Promise.all([
-safeFetch(() => fetchTrending()),
+          safeFetch(() => fetchTrending()),
           safeFetch(() => fetchTop10()),
           safeFetch(() => fetchByGenre(28)), // Action
           safeFetch(() => fetchByGenre(35)), // Comedy
@@ -68,7 +62,7 @@ safeFetch(() => fetchTrending()),
           safeFetch(() => fetchAnimeByGenre('Action', 15)),
           safeFetch(() => fetchAnimeByGenre('Comedy', 15)),
           safeFetch(() => fetchAnimeByGenre('Drama', 15))
-]);
+        ]);
         
         
         // Assemble Hero
@@ -97,7 +91,7 @@ safeFetch(() => fetchTrending()),
         
         const detailedHeroItems = await Promise.all(
           combinedHeroItems.map(async (item: any) => {
-            if (item.source === 'anilist') return item; // No extra fetch needed for AniList right now unless we want more details
+            if (item.source === 'anilist') return item;
             try {
               return await fetchDetails(item.id, item.media_type || 'movie');
             } catch (e) {
@@ -137,15 +131,22 @@ safeFetch(() => fetchTrending()),
           drama: mix(dramaData.results || [], dramaAnimeData.results || [])
         };
 
+        // Eagerly pre-resolve HD clear logos for top visible rows
+        preloadLogosForItems([
+          ...newData.heroItems,
+          ...newData.top10,
+          ...newData.trending.slice(4, 14),
+          ...newData.action.slice(0, 10)
+        ]);
         
         cachedHomeData = newData;
         setData(newData);
         setIsFadingOut(true);
-        setTimeout(() => setIsLoading(false), 800);
+        setTimeout(() => setIsLoading(false), 200);
       } catch (err) {
         console.error("Failed to load TMDB data", err);
         setIsFadingOut(true);
-        setTimeout(() => setIsLoading(false), 800);
+        setTimeout(() => setIsLoading(false), 200);
       }
     };
     
@@ -156,7 +157,7 @@ safeFetch(() => fetchTrending()),
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-[100vw]">
       {isLoading && (
         <div 
-          className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-700 ease-in-out ${isFadingOut ? 'opacity-0' : 'opacity-100'}`}
+          className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-200 ease-out ${isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         >
           <div className="flex flex-col items-center gap-4">
             <h1 className="text-[#d4d4d4] text-5xl md:text-7xl font-black lowercase tracking-tight drop-shadow-md animate-pulse">

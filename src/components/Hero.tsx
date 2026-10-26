@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Search, SlidersHorizontal, Heart, Bookmark, Plus, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo, getCachedLogo } from '../api/tmdb';
+import { IMAGE_BASE_URL, IMAGE_BASE_URL_W500, fetchTrailer, resolveLogo, getCachedLogo, preloadLogosForItems } from '../api/tmdb';
 
 import HeroSkeleton from './HeroSkeleton';
 
@@ -13,9 +13,15 @@ export default function Hero({ items }: HeroProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(() => (items && items[0] ? getCachedLogo(items[0]) : null));
   const navigate = useNavigate();
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (items && items.length > 0) {
+      preloadLogosForItems(items);
+    }
+  }, [items]);
 
   useEffect(() => {
     if (items && items[activeIndex]) {
@@ -171,6 +177,9 @@ export default function Hero({ items }: HeroProps) {
               key={`base-${item.id}`}
               src={(item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL}${item.backdrop_path}`)} 
               alt={item.title || item.name} 
+              loading={idx <= 2 ? "eager" : "lazy"}
+              decoding="async"
+              fetchPriority={isActive ? "high" : "auto"}
               className={`absolute inset-0 w-full h-full object-cover object-top transition-opacity duration-700 ease-in-out ${isVisible ? 'opacity-100' : 'opacity-0'}`}
             />
           );
@@ -191,7 +200,9 @@ export default function Hero({ items }: HeroProps) {
               src={logoUrl} 
               alt={activeItem.title || activeItem.name} 
               className="h-24 md:h-36 object-contain object-left max-w-[500px]"
-              loading="lazy"
+              loading="eager"
+              decoding="async"
+              fetchPriority="high"
             />
           ) : (
             <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-none uppercase">
@@ -235,7 +246,8 @@ export default function Hero({ items }: HeroProps) {
                   src={(item.poster_path?.startsWith('http') ? item.poster_path : `${IMAGE_BASE_URL_W500}${item.poster_path}`)} 
                   alt={item.title || item.name}
                   className="w-full h-full object-cover"
-                  loading="lazy"
+                  loading="eager"
+                  decoding="async"
                 />
               </div>
               {/* Progress Line */}
