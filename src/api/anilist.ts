@@ -1,12 +1,42 @@
 import { resolveAnimeMapping, preloadFribbMapping } from './fribb';
-import { extractBestLogoPath, primeLogoCache, IMAGE_BASE_URL_W500 } from './tmdb';
+import { extractBestLogoPath, primeLogoCache, IMAGE_BASE_URL_W500, setSeedItem, getSeedItem } from './tmdb';
 
 const ANILIST_API_URL = 'https://graphql.anilist.co';
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const TMDB_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmYmM3ZjM4ZTEwNzBmMWI4NzM2MDc4OTM4MDA1OThkOSIsIm5iZiI6MTcxNzIxNDAzNi4wMzIsInN1YiI6IjY2NWE5YjU0M2MzMmNiMWFiZmFmMGFmOCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.BEKlgnL8r52GcU2Fb8QXcp3W9-giqabR8AtbBlGDmU0';
 
-// Eagerly start Fribb mapping download/parse at module load
 preloadFribbMapping();
+
+const MEDIA_FIELDS = `
+  id
+  title { romaji english native }
+  description
+  coverImage { extraLarge large }
+  bannerImage
+  averageScore
+  startDate { year month day }
+  status
+  episodes
+  genres
+  trailer { id site }
+  relations {
+    edges {
+      relationType
+      node {
+        id
+        type
+        format
+        title { romaji english }
+      }
+    }
+  }
+  streamingEpisodes {
+    title
+    thumbnail
+    url
+    site
+  }
+`;
 
 interface TmdbAnimeMediaCache {
   poster_path: string | null;
@@ -22,14 +52,12 @@ const inFlightAniList = new Map<string, Promise<any>>();
 const fetchTmdbImages = async (tmdbId: number | string, tmdbType: string): Promise<TmdbAnimeMediaCache | null> => {
   const key = `tmdb_anime_v2_${tmdbType}_${tmdbId}`;
 
-  // 1. Fast in-memory hit
   if (tmdbMediaMemoryCache.has(key)) {
     const cached = tmdbMediaMemoryCache.get(key)!;
     primeLogoCache(tmdbType, tmdbId, cached.logo_path);
     return cached;
   }
 
-  // 2. LocalStorage hit
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const raw = localStorage.getItem(key);
@@ -46,15 +74,13 @@ const fetchTmdbImages = async (tmdbId: number | string, tmdbType: string): Promi
     }
   }
 
-  // 3. Deduplicate in-flight requests
   if (inFlightTmdbMedia.has(key)) {
     return inFlightTmdbMedia.get(key)!;
   }
 
   const promise = (async () => {
     try {
-      // Fetch poster, backdrop, AND clear logo in ONE single request
-      const url = `https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?append_to_response=images&include_image_language=en,null`;
+      const url = `https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?append_to_response=images`;
       const res = await fetch(url, {
         headers: {
           accept: 'application/json',
@@ -97,7 +123,7 @@ const fetchTmdbImages = async (tmdbId: number | string, tmdbType: string): Promi
 };
 
 const fetchAniList = async (query: string, variables: any = {}, retries = 3): Promise<any> => {
-  const cacheKey = `anilist_${ JSON.stringify({ q: query.trim(), v: variables }) }`;
+  const cacheKey = `anilist_v2_${JSON.stringify({ q: query.trim(), v: variables })}`;
 
   if (anilistResponseCache.has(cacheKey)) {
     return anilistResponseCache.get(cacheKey);
@@ -154,7 +180,7 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
         return json;
       } catch (e: any) {
         if (i === retries - 1) throw e;
-        await sleep((i + 1) * 500);
+        await sleep((i + 1) * 400);
       }
     }
   })();
@@ -169,6 +195,14 @@ const fetchAniList = async (query: string, variables: any = {}, retries = 3): Pr
 
 const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = false): Promise<any> => {
   if (!media) return null;
+
+  // Check if we already fully normalized this anime with TMDB images
+  if (!skipTmdbImages) {
+    const existing = getSeedItem('anime', media.id);
+    if (existing && existing.anilist_raw?.relations) {
+      return existing;
+    }
+  }
   
   const mapping = await resolveAnimeMapping(media.id);
   const isMovieFormat = media.format === 'MOVIE' || mapping.type === 'MOVIE';
@@ -180,7 +214,6 @@ const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = fals
   let backdrop_path = media.bannerImage || media.coverImage?.extraLarge;
   let logo_path: string | null = null;
   
-  // Override with TMDB images & clear logo in a single parallel-cached call
   if (!skipTmdbImages && tmdbId && tmdbType) {
     const tmdbImages = await fetchTmdbImages(tmdbId, tmdbType);
     if (tmdbImages) {
@@ -192,7 +225,7 @@ const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = fals
   
   const title = media.title?.english || media.title?.romaji || media.title?.native;
 
-  return {
+  const normalized = {
     id: media.id,
     tmdb_id: tmdbId,
     tmdb_season: tmdbSeason,
@@ -218,6 +251,11 @@ const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = fals
     trailer: media.trailer?.site === 'youtube' ? media.trailer.id : null,
     anilist_raw: media
   };
+
+  if (!skipTmdbImages) {
+    setSeedItem('anime', media.id, normalized);
+  }
+  return normalized;
 };
 
 export const fetchTrendingAnime = async (perPage = 10, skipTmdbImages = false) => {
@@ -226,17 +264,7 @@ export const fetchTrendingAnime = async (perPage = 10, skipTmdbImages = false) =
     query ($perPage: Int) {
       Page (page: 1, perPage: $perPage) {
         media (type: ANIME, sort: TRENDING_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
-          id
-          title { romaji english native }
-          description
-          coverImage { extraLarge large }
-          bannerImage
-          averageScore
-          startDate { year month day }
-          status
-          episodes
-          genres
-          trailer { id site }
+          ${MEDIA_FIELDS}
         }
       }
     }
@@ -260,17 +288,7 @@ export const fetchNewlyAddedAnime = async (perPage = 10, skipTmdbImages = false)
     query ($perPage: Int) {
       Page (page: 1, perPage: $perPage) {
         media (type: ANIME, sort: START_DATE_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
-          id
-          title { romaji english native }
-          description
-          coverImage { extraLarge large }
-          bannerImage
-          averageScore
-          startDate { year month day }
-          status
-          episodes
-          genres
-          trailer { id site }
+          ${MEDIA_FIELDS}
         }
       }
     }
@@ -289,38 +307,17 @@ export const fetchNewlyAddedAnime = async (perPage = 10, skipTmdbImages = false)
 };
 
 export const fetchAnimeDetails = async (id: number) => {
+  // Instant return if already cached in memory with relations
+  const cached = getSeedItem('anime', id);
+  if (cached && cached.anilist_raw?.relations) {
+    return cached;
+  }
+
   await preloadFribbMapping();
   const query = `
     query ($id: Int) {
       Media (id: $id, type: ANIME) {
-        id
-        title { romaji english native }
-        description
-        coverImage { extraLarge large }
-        bannerImage
-        averageScore
-        startDate { year month day }
-        status
-        episodes
-        genres
-        trailer { id site }
-        relations {
-          edges {
-            relationType
-            node {
-              id
-              type
-              format
-              title { romaji english }
-            }
-          }
-        }
-        streamingEpisodes {
-          title
-          thumbnail
-          url
-          site
-        }
+        ${MEDIA_FIELDS}
       }
     }
   `;
@@ -329,7 +326,7 @@ export const fetchAnimeDetails = async (id: number) => {
     return await normalizeAniListToTmdb(data.data?.Media);
   } catch (e) {
     console.error(`fetchAnimeDetails failed for ${id}:`, e);
-    return null;
+    return cached || null;
   }
 };
 
@@ -339,17 +336,7 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20, skipTmdbIma
     query ($genre: String, $perPage: Int) {
       Page (page: 1, perPage: $perPage) {
         media (type: ANIME, genre: $genre, sort: POPULARITY_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
-          id
-          title { romaji english native }
-          description
-          coverImage { extraLarge large }
-          bannerImage
-          averageScore
-          startDate { year month day }
-          status
-          episodes
-          genres
-          trailer { id site }
+          ${MEDIA_FIELDS}
         }
       }
     }
@@ -367,23 +354,61 @@ export const fetchAnimeByGenre = async (genre: string, perPage = 20, skipTmdbIma
   }
 };
 
+export const fetchAnimeByTag = async (tag: string, perPage = 20, skipTmdbImages = false) => {
+  await preloadFribbMapping();
+  const query = `
+    query ($tag: String, $perPage: Int) {
+      Page (page: 1, perPage: $perPage) {
+        media (type: ANIME, tag: $tag, sort: POPULARITY_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
+          ${MEDIA_FIELDS}
+        }
+      }
+    }
+  `;
+  try {
+    const data = await fetchAniList(query, { tag, perPage });
+    const mediaItems = data.data?.Page?.media || [];
+    const results = await Promise.all(
+      mediaItems.map((item: any) => normalizeAniListToTmdb(item, skipTmdbImages))
+    );
+    return { results: results.filter(Boolean) };
+  } catch (e) {
+    console.error(`fetchAnimeByTag failed for ${tag}:`, e);
+    return { results: [] };
+  }
+};
+
+export const fetchTopRatedAnime = async (perPage = 20, skipTmdbImages = false) => {
+  await preloadFribbMapping();
+  const query = `
+    query ($perPage: Int) {
+      Page (page: 1, perPage: $perPage) {
+        media (type: ANIME, sort: SCORE_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
+          ${MEDIA_FIELDS}
+        }
+      }
+    }
+  `;
+  try {
+    const data = await fetchAniList(query, { perPage });
+    const mediaItems = data.data?.Page?.media || [];
+    const results = await Promise.all(
+      mediaItems.map((item: any) => normalizeAniListToTmdb(item, skipTmdbImages))
+    );
+    return { results: results.filter(Boolean) };
+  } catch (e) {
+    console.error('fetchTopRatedAnime failed:', e);
+    return { results: [] };
+  }
+};
+
 export const searchAnime = async (search: string, perPage = 20, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($search: String, $perPage: Int) {
       Page (page: 1, perPage: $perPage) {
         media (type: ANIME, search: $search, sort: POPULARITY_DESC, isAdult: false) {
-          id
-          title { romaji english native }
-          description
-          coverImage { extraLarge large }
-          bannerImage
-          averageScore
-          startDate { year month day }
-          status
-          episodes
-          genres
-          trailer { id site }
+          ${MEDIA_FIELDS}
         }
       }
     }

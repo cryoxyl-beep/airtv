@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
-import { fetchTop10, IMAGE_BASE_URL_W500, fetchTrending } from '../api/tmdb';
+import { fetchTop10, IMAGE_BASE_URL_W500, fetchTrending, preloadImageUrls } from '../api/tmdb';
 import { fetchTrendingAnime } from '../api/anilist';
+import { preloadHomeData } from './Home';
 import { ChevronRight, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -85,12 +86,11 @@ export default function Landing() {
   const [authError, setAuthError] = useState('');
 
   useEffect(() => {
-    // Quick splash for the landing page
-    const timer = setTimeout(() => setShowSplash(false), 450);
-    return () => clearTimeout(timer);
-  }, []);
+    let mounted = true;
+    const fallbackTimer = setTimeout(() => {
+      if (mounted) setShowSplash(false);
+    }, 850);
 
-  useEffect(() => {
     const loadLandingData = async () => {
       try {
         const [trendingRes, animeRes, moviesRes] = await Promise.all([
@@ -99,28 +99,44 @@ export default function Landing() {
           fetchTrending()
         ]);
         
-        // Assemble posters for wall
         const mixed = [
           ...(trendingRes.results || []),
           ...(animeRes.results || []),
           ...(moviesRes.results || [])
         ].filter(p => p.poster_path);
         
-        // Shuffle for visual variety
         for (let i = mixed.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [mixed[i], mixed[j]] = [mixed[j], mixed[i]];
         }
         
-        // Unique
-        const uniquePosters = mixed.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
-        setWallPosters(uniquePosters.slice(0, 40));
+        const uniquePosters = mixed.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i).slice(0, 40);
+        if (mounted) {
+          setWallPosters(uniquePosters);
+        }
 
+        // Preload first 16 wall poster image bytes into browser cache before lifting splash
+        const posterUrls = uniquePosters.slice(0, 16).map(p =>
+          p.poster_path.startsWith('http') ? p.poster_path : `${IMAGE_BASE_URL_W500}${p.poster_path}`
+        );
+        await preloadImageUrls(posterUrls, 550);
+        if (mounted) {
+          setShowSplash(false);
+        }
+
+        // Warm up the entire Home screen metadata & visual assets in the background!
+        preloadHomeData().catch(() => {});
       } catch (err) {
         console.error("Error loading landing data:", err);
+        if (mounted) setShowSplash(false);
       }
     };
     loadLandingData();
+
+    return () => {
+      mounted = false;
+      clearTimeout(fallbackTimer);
+    };
   }, []);
 
   const handleGoogleLogin = async (e: React.MouseEvent) => {

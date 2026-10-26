@@ -1,6 +1,8 @@
-import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
+import React, { useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
-import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo, hasCachedLogoEntry } from '../api/tmdb';
+import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo, fetchDetails } from '../api/tmdb';
+import { buildAnimeEpisodeList } from '../api/animeResolver';
+import { dedupeItems } from '../utils/dedupe';
 
 interface RowProps {
   title: string;
@@ -44,17 +46,16 @@ const unobserveElement = (element: Element) => {
 };
 
 export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
-  const alreadyCached = hasCachedLogoEntry(item);
   const initialLogo = getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
-  const [loadingLogo, setLoadingLogo] = useState(!alreadyCached);
+  const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(index < 8);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isVisible || alreadyCached) return;
+    if (isVisible || logo) return;
     const el = cardRef.current;
     if (el) {
       observeElement(el, () => {
@@ -66,11 +67,12 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
         unobserveElement(el);
       }
     };
-  }, [isVisible, alreadyCached]);
+  }, [isVisible, logo]);
 
   useEffect(() => {
-    if (hasCachedLogoEntry(item)) {
-      setLogo(getCachedLogo(item));
+    const cached = getCachedLogo(item);
+    if (cached) {
+      setLogo(cached);
       setLoadingLogo(false);
       return;
     }
@@ -78,6 +80,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
     if (!isVisible) return;
 
     let mounted = true;
+    setLoadingLogo(true);
     const getLogo = async () => {
       try {
         const foundLogo = await resolveLogo(item);
@@ -95,23 +98,39 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
     };
   }, [item, isVisible]);
 
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+    // Prefetch full metadata & episodes on hover so clicking is instant
+    if (item.source === 'anilist') {
+      buildAnimeEpisodeList(
+        item.id,
+        item.number_of_episodes || 12,
+        item.anilist_raw?.streamingEpisodes,
+        item.backdrop_path
+      ).catch(() => {});
+    } else if (item.id) {
+      const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
+      fetchDetails(item.id, type === 'tv' ? 'tv' : 'movie').catch(() => {});
+    }
+  };
+
   return (
     <div
       ref={cardRef}
       className={`relative z-10 flex-shrink-0 cursor-pointer flex items-center group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110 ${
         isTop10 ? 'gap-2 md:gap-4' : isGridCard ? 'w-full' : 'w-[300px] md:w-[400px] lg:w-[450px]'
       }`}
-      onMouseEnter={() => setIsHovered(true)}
+      onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovered(false)}
       onClick={() => {
         if (item.source === 'anilist') {
-          navigate(`/anime/${item.id}`);
+          navigate(`/anime/${item.id}`, { state: { item } });
         } else {
           const type = item.media_type || (item.first_air_date ? 'tv' : 'movie');
           if (type === 'tv') {
-            navigate(`/watch/tv/${item.id}`);
+            navigate(`/watch/tv/${item.id}`, { state: { item } });
           } else {
-            navigate(`/watch/movie/${item.id}`);
+            navigate(`/watch/movie/${item.id}`, { state: { item } });
           }
         }
       }}
@@ -152,6 +171,9 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
                 className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
                 draggable={false}
                 decoding="async"
+                onError={() => {
+                  setLogo(null);
+                }}
               />
               {item.source === 'anilist' && !hideTitleWithLogo && (
                 <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">
@@ -237,6 +259,10 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
     }
   };
 
+  const uniqueItems = useMemo(() => {
+    return dedupeItems(items || []);
+  }, [items]);
+
   return (
     <div className="relative group/row">
       <div className="flex items-center justify-between pl-12 pr-12 mb-2">
@@ -253,7 +279,7 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
       >
         <div className={`${isTop10 ? 'w-4' : 'w-8'} shrink-0`} />
         
-        {items.length === 0 ? (
+        {uniqueItems.length === 0 ? (
           [...Array(6)].map((_, index) => (
             <div key={`skeleton-${index}`} className={`relative z-10 flex-shrink-0 flex items-center ${isTop10 ? 'gap-2 md:gap-4' : 'w-[300px] md:w-[400px] lg:w-[450px]'}`}>
               {isTop10 && (
@@ -267,9 +293,9 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
             </div>
           ))
         ) : (
-          items.map((item, index) => {
+          uniqueItems.map((item, index) => {
             if (!item.backdrop_path) return null;
-            return <RowCard key={item.id} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />;
+            return <RowCard key={`${item.id}-${item.tmdb_id || index}`} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />;
           })
         )}
 
