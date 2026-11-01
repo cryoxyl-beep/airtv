@@ -286,9 +286,10 @@ export default function Hero({ items }: HeroProps) {
           })}
         </div>
 
-        {/* Layer 2: Single Left-to-Right Gradient & Subtle Bottom Blend */}
-        <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-black/80 via-black/30 via-35% to-transparent to-65% z-20 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-20 sm:h-24 bg-gradient-to-t from-black/50 to-transparent z-20 pointer-events-none" />
+        {/* Layer 2: Media-Aware Directional Gradients for Readability Inside Container */}
+        <div className={`absolute inset-y-0 left-0 bg-gradient-to-r ${isTrailerVisible ? 'from-black/55 via-black/20 to-transparent' : 'from-black/70 via-black/30 to-transparent'} w-[75%] sm:w-[55%] md:w-[46%] lg:w-[42%] z-20 pointer-events-none transition-all duration-700 ease-in-out`} />
+        <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(0,0,0,0.55)_0%,_rgba(0,0,0,0.2)_40%,_transparent_70%)] ${isTrailerVisible ? 'opacity-60' : 'opacity-100'} z-20 pointer-events-none transition-opacity duration-700 ease-in-out`} />
+        <div className="absolute inset-x-0 bottom-0 h-24 sm:h-28 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-20 pointer-events-none" />
 
         {/* Layer 3: Left-Aligned Hero Content Hierarchy */}
         <div className="relative w-full z-30 flex flex-col justify-end">
