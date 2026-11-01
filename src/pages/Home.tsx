@@ -291,7 +291,11 @@ export const preloadHomeData = async (): Promise<any> => {
   return homeLoadPromise;
 };
 
-export default function Home() {
+interface HomeProps {
+  typeFilter?: 'shows' | 'movies';
+}
+
+export default function Home({ typeFilter }: HomeProps = {}) {
   const [isLoading, setIsLoading] = useState(!cachedHomeData);
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [data, setData] = useState<any>(cachedHomeData || {
@@ -350,6 +354,19 @@ export default function Home() {
     };
   }, []);
 
+  const heroItems = React.useMemo(() => {
+    if (!data.heroItems || data.heroItems.length === 0) return [];
+    if (typeFilter === 'shows') {
+      const shows = data.heroItems.filter((i: any) => i.source === 'anilist' || i.media_type === 'tv' || i.first_air_date || i.number_of_seasons);
+      return shows.length > 0 ? shows : data.heroItems;
+    }
+    if (typeFilter === 'movies') {
+      const movies = data.heroItems.filter((i: any) => i.media_type === 'movie' || i.release_date);
+      return movies.length > 0 ? movies : data.heroItems;
+    }
+    return data.heroItems;
+  }, [data.heroItems, typeFilter]);
+
   return (
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-[100vw]">
       {isLoading && (
@@ -368,10 +385,10 @@ export default function Home() {
       )}
 
       {/* Hero Billboard */}
-      <Hero items={data.heroItems} />
+      <Hero items={heroItems} />
 
       {/* Content Feed with Continuous, Spaced Categories */}
-      <div className="relative z-20 flex flex-col gap-4 pt-4">
+      <div className="relative z-20 flex flex-col gap-4 pt-8 md:pt-10">
         
         {/* Ranked Spotlight */}
         <Row 

@@ -39,6 +39,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/home" element={<Home />} />
+          <Route path="/shows" element={<Home typeFilter="shows" />} />
+          <Route path="/movies" element={<Home typeFilter="movies" />} />
           <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />
           <Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />
           <Route path="/watch/tv/:id/:season/:episode" element={<WatchPage type="tv" />} />
