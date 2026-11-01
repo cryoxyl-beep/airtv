@@ -286,38 +286,46 @@ export default function Hero({ items }: HeroProps) {
           })}
         </div>
 
-        {/* Layer 2: Controlled Dark Gradients for Readability Inside Container */}
-        <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-black/95 via-black/75 md:via-black/65 to-transparent w-full md:w-[65%] lg:w-[58%] z-20 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-48 sm:h-60 bg-gradient-to-t from-black/95 via-black/60 to-transparent z-20 pointer-events-none" />
-        <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-black/40 to-transparent z-20 pointer-events-none" />
+        {/* Layer 2: Media-Aware Directional Gradients for Readability Inside Container */}
+        <div className={`absolute inset-y-0 left-0 bg-gradient-to-r ${isTrailerVisible ? 'from-black/55 via-black/20 to-transparent' : 'from-black/70 via-black/30 to-transparent'} w-[75%] sm:w-[55%] md:w-[46%] lg:w-[42%] z-20 pointer-events-none transition-all duration-700 ease-in-out`} />
+        <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(0,0,0,0.55)_0%,_rgba(0,0,0,0.2)_40%,_transparent_70%)] ${isTrailerVisible ? 'opacity-60' : 'opacity-100'} z-20 pointer-events-none transition-opacity duration-700 ease-in-out`} />
+        <div className="absolute inset-x-0 bottom-0 h-24 sm:h-28 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-20 pointer-events-none" />
 
         {/* Layer 3: Left-Aligned Hero Content Hierarchy */}
         <div className="relative w-full z-30 flex flex-col justify-end">
           
           {/* Left Information Stack: Logo -> Metadata -> Description -> Buttons */}
-          <div key={activeItem.id} className="animate-fade-in flex flex-col space-y-3.5 sm:space-y-4 max-w-md sm:max-w-lg md:max-w-xl">
+          <div key={activeItem.id} className="animate-fade-in flex flex-col space-y-3.5 sm:space-y-4 max-w-md sm:max-w-lg md:max-w-xl transition-all duration-700 ease-in-out">
             
             {/* 1. HD Clear Logo (Middle/Lower-Middle Left, Preserve Aspect Ratio & Fallback) */}
             {logoUrl ? (
-              <div className="h-16 sm:h-24 md:h-32 lg:h-36 flex items-end">
+              <div className={`flex items-end transition-all duration-700 ease-in-out origin-bottom-left ${
+                isTrailerVisible 
+                  ? 'h-14 sm:h-20 md:h-24 lg:h-28 scale-[0.92]' 
+                  : 'h-16 sm:h-24 md:h-32 lg:h-36 scale-100'
+              }`}>
                 <img 
                   src={logoUrl} 
                   alt={activeTitle} 
-                  className="max-h-full max-w-[240px] sm:max-w-[340px] md:max-w-[420px] object-contain object-left select-none filter drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]"
+                  className="max-h-full max-w-[240px] sm:max-w-[340px] md:max-w-[420px] object-contain object-left select-none filter drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] transition-all duration-700 ease-in-out"
                   loading="eager"
                   decoding="async"
                   fetchPriority="high"
                 />
               </div>
             ) : (
-              <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight uppercase leading-none drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)]">
+              <h1 className={`font-black text-white tracking-tight uppercase leading-none drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)] transition-all duration-700 ease-in-out origin-bottom-left ${
+                isTrailerVisible 
+                  ? 'text-2xl sm:text-4xl md:text-5xl scale-[0.92]' 
+                  : 'text-3xl sm:text-5xl md:text-6xl scale-100'
+              }`}>
                 {activeTitle}
               </h1>
             )}
 
             {/* 2. Metadata Row Immediately Below Logo (Unboxed Text with Bullet Separators) */}
             {metadataItems.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-white/90 drop-shadow-md">
+              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-white/90 drop-shadow-md transition-all duration-500 ease-in-out">
                 {metadataItems.map((meta, i) => (
                   <React.Fragment key={i}>
                     <span>{meta}</span>
@@ -329,15 +337,19 @@ export default function Hero({ items }: HeroProps) {
               </div>
             )}
 
-            {/* 3. Description Below Metadata (Left-aligned, 2-3 lines max, reasonable width) */}
+            {/* 3. Description Below Metadata (Faintly fades out and collapses when trailer plays) */}
             {description && (
-              <p className="text-xs sm:text-sm md:text-[15px] text-white/85 line-clamp-3 leading-relaxed max-w-md md:max-w-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-normal">
+              <p className={`text-xs sm:text-sm md:text-[15px] text-white/85 leading-relaxed max-w-md md:max-w-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-normal transition-all duration-700 ease-in-out overflow-hidden ${
+                isTrailerVisible 
+                  ? 'opacity-0 max-h-0 -translate-y-2 pointer-events-none -my-1.5' 
+                  : 'opacity-100 max-h-28 line-clamp-3 translate-y-0 my-0'
+              }`}>
                 {description}
               </p>
             )}
 
             {/* 4. Pill Action Buttons (Play & More Info matching Netflix reference) */}
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex items-center gap-3 pt-1 transition-all duration-500 ease-in-out">
               <button 
                 type="button"
                 onClick={handlePlay}
