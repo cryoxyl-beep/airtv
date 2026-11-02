@@ -46,16 +46,16 @@ const unobserveElement = (element: Element) => {
 };
 
 export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
-  const initialLogo = getCachedLogo(item);
+  const initialLogo = isTop10 ? null : getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
-  const [loadingLogo, setLoadingLogo] = useState(!initialLogo);
+  const [loadingLogo, setLoadingLogo] = useState(!initialLogo && !isTop10);
   const cardRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(index < 8);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isVisible || logo) return;
+    if (isTop10 || isVisible || logo) return;
     const el = cardRef.current;
     if (el) {
       observeElement(el, () => {
@@ -67,9 +67,10 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
         unobserveElement(el);
       }
     };
-  }, [isVisible, logo]);
+  }, [isTop10, isVisible, logo]);
 
   useEffect(() => {
+    if (isTop10) return;
     const cached = getCachedLogo(item);
     if (cached) {
       setLogo(cached);
@@ -96,7 +97,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
     return () => {
       mounted = false;
     };
-  }, [item, isVisible]);
+  }, [item, isVisible, isTop10]);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -114,11 +115,21 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
     }
   };
 
+  const posterImg = item.poster_path
+    ? (item.poster_path.startsWith('http') ? item.poster_path : `${IMAGE_BASE_URL_W500}${item.poster_path}`)
+    : (item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL_W500}${item.backdrop_path}`);
+
+  const backdropImg = item.backdrop_path
+    ? (item.backdrop_path.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL_W500}${item.backdrop_path}`)
+    : posterImg;
+
+  const currentImg = isTop10 ? posterImg : backdropImg;
+
   return (
     <div
       ref={cardRef}
-      className={`relative z-10 flex-shrink-0 cursor-pointer flex items-center group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-110 ${
-        isTop10 ? 'gap-2 md:gap-4' : isGridCard ? 'w-full' : 'w-[300px] md:w-[400px] lg:w-[450px]'
+      className={`relative z-10 flex-shrink-0 cursor-pointer flex items-center group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-105 ${
+        isTop10 ? 'gap-0' : isGridCard ? 'w-full' : 'w-[300px] md:w-[400px] lg:w-[450px]'
       }`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={() => setIsHovered(false)}
@@ -136,11 +147,11 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
       }}
     >
       {isTop10 && (
-        <div className="flex-shrink-0 flex items-center justify-center z-10">
+        <div className="flex-shrink-0 flex items-center justify-center z-10 select-none">
           <span
-            className="text-[90px] md:text-[110px] font-sans font-bold leading-none pointer-events-none select-none tracking-normal transition-all duration-300"
+            className="text-[95px] sm:text-[115px] md:text-[130px] lg:text-[145px] font-sans font-black leading-none pointer-events-none select-none tracking-tighter transition-all duration-300"
             style={{
-              WebkitTextStroke: isHovered ? '1.5px rgba(255, 255, 255, 1)' : '1.5px rgba(255, 255, 255, 0.4)',
+              WebkitTextStroke: isHovered ? '2px rgba(255, 255, 255, 1)' : '2px rgba(255, 255, 255, 0.4)',
               color: isHovered ? 'white' : 'transparent',
             }}
           >
@@ -149,44 +160,46 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
         </div>
       )}
 
-      <div className={`relative rounded-md overflow-hidden bg-[#141414] border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`}>
+      <div className={`relative rounded-md overflow-hidden bg-[#141414] border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] z-20 ${isTop10 ? 'w-[130px] sm:w-[155px] md:w-[175px] lg:w-[195px] aspect-[2/3] -ml-3 sm:-ml-4 md:-ml-6' : 'w-full aspect-video'}`}>
         <img
-          src={(item.backdrop_path?.startsWith('http') ? item.backdrop_path : `${IMAGE_BASE_URL_W500}${item.backdrop_path}`)}
+          src={currentImg}
           alt={item.title || item.name}
-          className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-110"
+          className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-105"
           loading={index < 6 ? "eager" : "lazy"}
           decoding="async"
           draggable={false}
         />
 
-        {/* Logo Overlay with subtle bottom gradient for readability */}
-        <div className="absolute inset-x-0 bottom-0 h-full bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end items-center p-4 pointer-events-none z-20">
-          {loadingLogo ? (
-            <div className="w-[60%] h-6 bg-white/20 animate-pulse rounded"></div>
-          ) : logo ? (
-            <>
-              <img
-                src={logo}
-                alt={item.title || item.name}
-                className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
-                draggable={false}
-                decoding="async"
-                onError={() => {
-                  setLogo(null);
-                }}
-              />
-              {item.source === 'anilist' && !hideTitleWithLogo && (
-                <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">
-                  {item.title || item.name}
-                </p>
-              )}
-            </>
-          ) : (
-            <h3 className="text-white font-bold text-lg drop-shadow-md text-center">
-              {item.title || item.name}
-            </h3>
-          )}
-        </div>
+        {/* Logo Overlay with subtle bottom gradient for readability (omitted on portrait Top 10 posters where artwork has embedded title) */}
+        {!isTop10 && (
+          <div className="absolute inset-x-0 bottom-0 h-full bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end items-center p-4 pointer-events-none z-20">
+            {loadingLogo ? (
+              <div className="w-[60%] h-6 bg-white/20 animate-pulse rounded"></div>
+            ) : logo ? (
+              <>
+                <img
+                  src={logo}
+                  alt={item.title || item.name}
+                  className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
+                  draggable={false}
+                  decoding="async"
+                  onError={() => {
+                    setLogo(null);
+                  }}
+                />
+                {item.source === 'anilist' && !hideTitleWithLogo && (
+                  <p className="text-white/80 text-[11px] font-semibold tracking-wide drop-shadow-md mt-1.5 text-center line-clamp-1">
+                    {item.title || item.name}
+                  </p>
+                )}
+              </>
+            ) : (
+              <h3 className="text-white font-bold text-lg drop-shadow-md text-center">
+                {item.title || item.name}
+              </h3>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -281,20 +294,20 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
         
         {uniqueItems.length === 0 ? (
           [...Array(6)].map((_, index) => (
-            <div key={`skeleton-${index}`} className={`relative z-10 flex-shrink-0 flex items-center ${isTop10 ? 'gap-2 md:gap-4' : 'w-[300px] md:w-[400px] lg:w-[450px]'}`}>
+            <div key={`skeleton-${index}`} className={`relative z-10 flex-shrink-0 flex items-center ${isTop10 ? 'gap-0' : 'w-[300px] md:w-[400px] lg:w-[450px]'}`}>
               {isTop10 && (
-                <div className="flex-shrink-0 flex items-center justify-center z-10">
-                  <span className="text-[90px] md:text-[110px] font-sans font-bold leading-none pointer-events-none select-none tracking-normal" style={{ WebkitTextStroke: '1.5px rgba(255, 255, 255, 0.4)', color: 'transparent' }}>
+                <div className="flex-shrink-0 flex items-center justify-center z-10 select-none">
+                  <span className="text-[95px] sm:text-[115px] md:text-[130px] lg:text-[145px] font-sans font-black leading-none pointer-events-none select-none tracking-tighter" style={{ WebkitTextStroke: '2px rgba(255, 255, 255, 0.4)', color: 'transparent' }}>
                     {(index + 1).toString().padStart(2, '0')}
                   </span>
                 </div>
               )}
-              <div className={`relative rounded-md overflow-hidden bg-white/5 animate-pulse aspect-video z-20 ${isTop10 ? 'w-[220px] md:w-[280px] lg:w-[320px] -ml-2 md:-ml-4' : 'w-full'}`} />
+              <div className={`relative rounded-md overflow-hidden bg-white/5 animate-pulse z-20 ${isTop10 ? 'w-[130px] sm:w-[155px] md:w-[175px] lg:w-[195px] aspect-[2/3] -ml-3 sm:-ml-4 md:-ml-6' : 'w-full aspect-video'}`} />
             </div>
           ))
         ) : (
           uniqueItems.map((item, index) => {
-            if (!item.backdrop_path) return null;
+            if (isTop10 ? (!item.poster_path && !item.backdrop_path) : !item.backdrop_path) return null;
             return <RowCard key={`${item.id}-${item.tmdb_id || index}`} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />;
           })
         )}

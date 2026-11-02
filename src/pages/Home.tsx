@@ -219,7 +219,6 @@ export const preloadHomeData = async (): Promise<any> => {
       // 1. Resolve clear logos for top visible items first
       const priorityItems = [
         ...newData.heroItems,
-        ...newData.top10.slice(0, 6),
         ...newData.trending.slice(4, 10)
       ];
       await Promise.race([
@@ -229,7 +228,6 @@ export const preloadHomeData = async (): Promise<any> => {
 
       // Pre-warm remaining row logos smoothly in background without blocking
       preloadLogosForItems([
-        ...newData.top10.slice(6),
         ...newData.trending.slice(10),
         ...newData.topRated.slice(0, 10),
         ...newData.action.slice(0, 8),
@@ -267,7 +265,15 @@ export const preloadHomeData = async (): Promise<any> => {
         }
       }
 
-      for (const card of [...newData.top10.slice(0, 6), ...newData.trending.slice(4, 9)]) {
+      for (const card of (newData.top10.slice(0, 6) as any[])) {
+        if (card?.poster_path) {
+          criticalImageUrls.push(
+            card.poster_path.startsWith('http') ? card.poster_path : `${IMAGE_BASE_URL_W500}${card.poster_path}`
+          );
+        }
+      }
+
+      for (const card of (newData.trending.slice(4, 9) as any[])) {
         if (card?.backdrop_path) {
           criticalImageUrls.push(
             card.backdrop_path.startsWith('http') ? card.backdrop_path : `${IMAGE_BASE_URL_W500}${card.backdrop_path}`
