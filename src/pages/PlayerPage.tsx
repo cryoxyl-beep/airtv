@@ -6,6 +6,7 @@ import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import EpisodeOverlay from '../components/EpisodeOverlay';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider } from '../utils/providers';
+import { saveWatchProgress } from '../utils/preferences';
 import { ArrowLeft, ListVideo } from 'lucide-react';
 
 export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' | 'anime' }) {
@@ -22,6 +23,16 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   const activeSeason = type === 'tv' ? (season ? parseInt(season, 10) : 1) : undefined;
   const activeEpisode = episode ? parseInt(episode, 10) : 1;
+
+  useEffect(() => {
+    if (id && type) {
+      saveWatchProgress(type, id, {
+        season: activeSeason,
+        episode: type === 'movie' ? undefined : activeEpisode,
+        progress: 0.35,
+      });
+    }
+  }, [id, type, activeSeason, activeEpisode]);
 
   useEffect(() => {
     const loadData = async () => {

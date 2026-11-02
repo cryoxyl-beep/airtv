@@ -1,22 +1,111 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo, fetchTrailer } from '../api/tmdb';
-import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX, ListVideo, Plus } from 'lucide-react';
-import { getVideoMutedPreference, setVideoMutedPreference } from '../utils/preferences';
+import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX, Plus, Check, RotateCcw, Layers } from 'lucide-react';
+import {
+  getVideoMutedPreference,
+  setVideoMutedPreference,
+  isInLibrary,
+  toggleLibraryItem,
+  getItemRating,
+  setItemRating,
+} from '../utils/preferences';
 
 interface WatchPageProps {
-  onPlay?: () => void;
-    item: any;
+  item: any;
   type: 'movie' | 'tv' | 'anime';
   seasonNumber?: number;
   episodeNumber?: number;
   seasonData?: any;
-  forceFullScreen?: boolean;
+  hasProgress?: boolean;
+  progressPercent?: number;
+  onPlay?: () => void;
+  onPlayFromBeginning?: () => void;
+  onOpenMoreEpisodes?: () => void;
 }
 
-export default function WatchPage({ item, type, seasonNumber, episodeNumber, seasonData, forceFullScreen, onPlay }: WatchPageProps) {
+function resolveMaturityRating(item: any, type: 'movie' | 'tv' | 'anime'): string {
+  if (item?.adult || item?.anilist_raw?.isAdult) {
+    return '18+';
+  }
+
+  // Check TMDB content_ratings (TV) or release_dates (Movie) if present
+  const tvRatings = item?.content_ratings?.results;
+  if (Array.isArray(tvRatings) && tvRatings.length > 0) {
+    const usOrIn =
+      tvRatings.find((r: any) => r.iso_3166_1 === 'IN' && r.rating) ||
+      tvRatings.find((r: any) => r.iso_3166_1 === 'US' && r.rating) ||
+      tvRatings.find((r: any) => r.rating);
+    if (usOrIn?.rating) return usOrIn.rating;
+  }
+
+  const movieReleases = item?.release_dates?.results;
+  if (Array.isArray(movieReleases) && movieReleases.length > 0) {
+    for (const code of ['IN', 'US', 'GB']) {
+      const country = movieReleases.find((r: any) => r.iso_3166_1 === code);
+      const cert = country?.release_dates?.find((d: any) => d.certification)?.certification;
+      if (cert) return cert;
+    }
+  }
+
+  // Derive sensible age rating from genres if explicit certification wasn't appended
+  const genreNames = (item?.genres || []).map((g: any) => (g.name || g || '').toLowerCase());
+  if (
+    genreNames.some((g: string) =>
+      ['horror', 'thriller', 'crime', 'psychological', 'mystery'].includes(g)
+    )
+  ) {
+    return 'U/A 16+';
+  }
+  return type === 'anime' ? 'U/A 13+' : 'U/A 13+';
+}
+
+function resolveContentAdvisories(item: any): string | null {
+  // Check AniList tags if available
+  const rawTags = item?.anilist_raw?.tags;
+  if (Array.isArray(rawTags) && rawTags.length > 0) {
+    const relevant = rawTags
+      .filter((t: any) => !t.isMediaSpoiler && t.rank >= 60 && t.name)
+      .slice(0, 3)
+      .map((t: any) => t.name.toLowerCase());
+    if (relevant.length > 0) {
+      const text = relevant.join(', ');
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+  }
+
+  // Derive concise descriptors from actual genres on the item
+  const genres = (item?.genres || [])
+    .map((g: any) => (typeof g === 'string' ? g : g?.name))
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (genres.length > 0) {
+    return genres.join(', ');
+  }
+
+  return null;
+}
+
+export default function WatchPage({
+  item,
+  type,
+  seasonNumber = 1,
+  episodeNumber = 1,
+  seasonData,
+  hasProgress = false,
+  progressPercent = 0.35,
+  onPlay,
+  onPlayFromBeginning,
+  onOpenMoreEpisodes,
+}: WatchPageProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
-  const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
-  
+  const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(() =>
+    item?.id ? getItemRating(type, item.id) : null
+  );
+  const [inLibrary, setInLibrary] = useState<boolean>(() =>
+    item?.id ? isInLibrary(type, item.id) : false
+  );
+
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerPlaying, setTrailerPlaying] = useState(false);
   const [trailerEnded, setTrailerEnded] = useState(false);
@@ -24,13 +113,19 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
   const [isMuted, setIsMuted] = useState(getVideoMutedPreference());
   const [initialMuted] = useState(isMuted);
   const [canReveal, setCanReveal] = useState(false);
-  
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const isPlayingRef = useRef(false);
   const inactivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cutoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  
+  useEffect(() => {
+    if (item?.id) {
+      setFeedback(getItemRating(type, item.id));
+      setInLibrary(isInLibrary(type, item.id));
+    }
+  }, [item?.id, type]);
+
   useEffect(() => {
     if (!document.getElementById('youtube-iframe-api')) {
       const tag = document.createElement('script');
@@ -42,23 +137,27 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
 
   useEffect(() => {
     let mounted = true;
-    resolveLogo(item).then(url => {
+    setLogoUrl(getCachedLogo(item));
+    resolveLogo(item).then((url) => {
       if (mounted && url) {
         setLogoUrl(url);
       }
     });
-    
-    const fetchT = item.source === 'anilist'
-      ? Promise.resolve(item.trailer)
-      : fetchTrailer(item.id, type === 'anime' ? 'tv' : type);
-      
-    fetchT.then(key => {
+
+    const fetchT =
+      item.source === 'anilist'
+        ? Promise.resolve(item.trailer)
+        : fetchTrailer(item.id, type === 'anime' ? 'tv' : type);
+
+    fetchT.then((key) => {
       if (mounted && key) {
         setTrailerKey(key);
       }
     });
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [item, type]);
 
   useEffect(() => {
@@ -71,19 +170,19 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
 
   useEffect(() => {
     if (!trailerKey) return;
-    
+
     // Listen for YouTube postMessage API to know exactly when it starts playing or ends
     const handleMessage = (event: MessageEvent) => {
       try {
         const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
         if (data && data.event === 'onStateChange') {
-          if (data.info === 1) { // playing
+          if (data.info === 1) {
             setTrailerPlaying(true);
             isPlayingRef.current = true;
-          } else if (data.info === 0) { // ended
+          } else if (data.info === 0) {
             setTrailerEnded(true);
             setTrailerPlaying(false);
-            setIsUiHidden(false); // Make UI permanently visible again
+            setIsUiHidden(false);
             isPlayingRef.current = false;
           }
         }
@@ -93,10 +192,6 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
     };
 
     window.addEventListener('message', handleMessage);
-
-    
-
-    
 
     let playerInitTimer: ReturnType<typeof setTimeout>;
 
@@ -108,8 +203,8 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
             onReady: (event: any) => {
               const duration = event.target.getDuration();
               const CUTOFF_BUFFER = 15;
-              const cutoffDelay = Math.max(0, (duration - CUTOFF_BUFFER)) * 1000;
-              
+              const cutoffDelay = Math.max(0, duration - CUTOFF_BUFFER) * 1000;
+
               if (duration > CUTOFF_BUFFER) {
                 cutoffTimerRef.current = setTimeout(() => {
                   if (event.target && typeof event.target.stopVideo === 'function') {
@@ -132,8 +227,8 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
                 setIsUiHidden(false);
                 isPlayingRef.current = false;
               }
-            }
-          }
+            },
+          },
         });
       } else {
         playerInitTimer = setTimeout(initPlayer, 100);
@@ -147,23 +242,29 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
       if (cutoffTimerRef.current) clearTimeout(cutoffTimerRef.current);
       window.removeEventListener('message', handleMessage);
       if (iframeRef.current && iframeRef.current.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
         iframeRef.current.src = 'about:blank';
       }
     };
   }, [trailerKey]);
 
-  const resetInactivityTimer = useCallback((delay: number) => {
-    if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
-    if (!isPlayingRef.current || trailerEnded) return;
+  const resetInactivityTimer = useCallback(
+    (delay: number) => {
+      if (inactivityTimerRef.current) clearTimeout(inactivityTimerRef.current);
+      if (!isPlayingRef.current || trailerEnded) return;
 
-    setIsUiHidden(false);
-    inactivityTimerRef.current = setTimeout(() => {
-      if (isPlayingRef.current && !trailerEnded) {
-        setIsUiHidden(true);
-      }
-    }, delay);
-  }, [trailerEnded]);
+      setIsUiHidden(false);
+      inactivityTimerRef.current = setTimeout(() => {
+        if (isPlayingRef.current && !trailerEnded) {
+          setIsUiHidden(true);
+        }
+      }, delay);
+    },
+    [trailerEnded]
+  );
 
   // Initial inactivity timer when video starts
   useEffect(() => {
@@ -175,8 +276,7 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
     }
   }, [trailerPlaying, trailerEnded, resetInactivityTimer]);
 
-  
-    const handleMouseMove = () => {
+  const handleMouseMove = () => {
     if (trailerPlaying && !trailerEnded) {
       resetInactivityTimer(2000);
     }
@@ -198,26 +298,89 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
     );
   };
 
-  // Determine the best backdrop to show while loading
-  let backdropPath = item?.backdrop_path;
-  const overviewText = item.overview;
-  
+  const handleFeedback = (value: 'like' | 'dislike') => {
+    const next = feedback === value ? null : value;
+    setFeedback(next);
+    if (item?.id) {
+      setItemRating(type, item.id, next);
+    }
+  };
+
+  const handleToggleLibrary = () => {
+    if (!item?.id) return;
+    const added = toggleLibraryItem(type, item.id);
+    setInLibrary(added);
+  };
+
+  // Determine backdrop and current episode metadata
+  const backdropPath = item?.backdrop_path;
   const isTrailerVisible = trailerPlaying && canReveal && !trailerEnded && trailerKey !== null;
 
+  const currentEpObj =
+    (type === 'tv' || type === 'anime') && Array.isArray(seasonData?.episodes)
+      ? seasonData.episodes.find((ep: any) => ep.episode_number === episodeNumber)
+      : null;
+
+  const activeEpisodeTitle =
+    currentEpObj?.name && !/^Episode\s+\d+$/i.test(currentEpObj.name.trim())
+      ? currentEpObj.name
+      : null;
+
+  const overviewText =
+    (currentEpObj?.overview && currentEpObj.overview.trim().length > 15
+      ? currentEpObj.overview
+      : item?.overview) || '';
+
+  // Metadata fields based on content type
+  const releaseYear = item?.first_air_date
+    ? new Date(item.first_air_date).getFullYear()
+    : item?.release_date
+    ? new Date(item.release_date).getFullYear()
+    : item?.anilist_raw?.seasonYear || '';
+
+  const primaryGenre = item?.genres?.[0]?.name || '';
+  const totalAnimeEpisodes =
+    item?.number_of_episodes ||
+    item?.anilist_raw?.episodes ||
+    seasonData?.episodes?.length ||
+    null;
+
+  const maturityRating = resolveMaturityRating(item, type);
+  const advisories = resolveContentAdvisories(item);
+
+  // Primary button label
+  let primaryButtonLabel = 'Watch Now';
+  if (hasProgress) {
+    if (type === 'tv') {
+      primaryButtonLabel = `Resume S${seasonNumber}: Ep. ${episodeNumber}`;
+    } else if (type === 'anime') {
+      primaryButtonLabel = `Resume Episode ${episodeNumber}`;
+    } else {
+      primaryButtonLabel = 'Resume';
+    }
+  }
+
   return (
-    <div 
-      className={`relative w-full bg-black overflow-hidden group ${type === 'movie' || forceFullScreen ? 'h-screen' : 'aspect-video md:aspect-[21/9] lg:aspect-[21/9] xl:aspect-[24/9]'}`}
+    <div
+      className="relative w-full h-screen min-h-[680px] bg-black overflow-hidden select-none"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
     >
-      
-      {/* Layer 0: YouTube Player */}
-      <div className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${trailerEnded ? 'opacity-0' : 'opacity-100'}`}>
+      {/* Layer 0: YouTube Trailer Player */}
+      <div
+        className={`absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden bg-black transition-opacity duration-700 ease-in-out ${
+          trailerEnded ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         {trailerKey && !trailerEnded && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[180%] aspect-video pointer-events-none">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] md:w-[175%] lg:w-[145%] aspect-video pointer-events-none">
             <iframe
               ref={iframeRef}
-              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${initialMuted ? 1 : 0}&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${window.location.origin}&cc_load_policy=0`}
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=${
+                initialMuted ? 1 : 0
+              }&controls=0&disablekb=1&fs=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&enablejsapi=1&origin=${
+                window.location.origin
+              }&cc_load_policy=0`}
               className="w-full h-full pointer-events-none object-cover"
               allow="autoplay; encrypted-media"
               tabIndex={-1}
@@ -226,27 +389,31 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
         )}
       </div>
 
-      {/* Layer 1: Static Backdrop Images */}
-      <div className={`absolute inset-0 w-full h-full z-10 pointer-events-none transition-opacity duration-700 ease-in-out ${isTrailerVisible ? 'opacity-0' : 'opacity-100'}`}>
+      {/* Layer 1: Static Backdrop Image */}
+      <div
+        className={`absolute inset-0 w-full h-full z-10 pointer-events-none transition-opacity duration-700 ease-in-out ${
+          isTrailerVisible ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         {backdropPath ? (
-          <img 
-            src={(backdropPath?.startsWith('http') ? backdropPath : `${IMAGE_BASE_URL}${backdropPath}`)} 
-            alt="Backdrop" 
-            className="w-full h-full object-cover"
+          <img
+            src={backdropPath.startsWith('http') ? backdropPath : `${IMAGE_BASE_URL}${backdropPath}`}
+            alt={item?.title || item?.name || 'Backdrop'}
+            className="w-full h-full object-cover object-center"
           />
         ) : (
           <div className="w-full h-full bg-[#111]" />
         )}
       </div>
 
-      {/* Layer 2: Gradients */}
+      {/* Layer 2: Directional Left & Bottom Gradients (Center and Right remain naturally illuminated) */}
       <div
         className="absolute inset-0 pointer-events-none z-20"
         style={{
           background: `
-            linear-gradient(to right, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.85) 25%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0) 75%),
-            linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 30%),
-            linear-gradient(to top, #000 0px, rgba(0,0,0,0.98) 15px, rgba(0,0,0,0.85) 50px, rgba(0,0,0,0.5) 150px, rgba(0,0,0,0.1) 250px, transparent 300px)
+            linear-gradient(to right, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.68) 24%, rgba(0,0,0,0.30) 46%, rgba(0,0,0,0.06) 64%, transparent 78%),
+            linear-gradient(to top, rgba(0,0,0,0.90) 0%, rgba(0,0,0,0.42) 16%, transparent 38%),
+            linear-gradient(to bottom, rgba(0,0,0,0.40) 0%, transparent 18%)
           `,
         }}
       />
@@ -257,129 +424,195 @@ export default function WatchPage({ item, type, seasonNumber, episodeNumber, sea
           <button
             onClick={toggleMute}
             className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
-            aria-label={isMuted ? "Unmute" : "Mute"}
+            aria-label={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
         </div>
       )}
 
-      {/* Hero Content (Logo, Metadata, Description, Buttons) */}
-      <div className="absolute inset-0 z-30 flex flex-col justify-end px-6 pb-6 pt-16 md:px-12 md:pb-10 lg:px-16 lg:pb-12 w-full pointer-events-none">
-        <div className="flex flex-col items-start justify-end gap-3 md:gap-4 shrink-0 max-w-[500px] flex-1 pointer-events-none">
-          
-          <div className="transition-opacity duration-500 mb-1 md:mb-2">
+      {/* Left-Side Cinematic Information Stack */}
+      <div className="absolute inset-0 z-30 flex flex-col justify-center px-6 pt-20 pb-10 md:px-14 lg:px-20 w-full pointer-events-none">
+        <div className="flex flex-col items-start justify-center gap-3 md:gap-3.5 max-w-[480px] lg:max-w-[520px] w-full pointer-events-none">
+          {/* 2A. HD Clear Logo (or Plain Text Fallback ONLY when logo is unavailable) */}
+          <div className="mb-1 md:mb-2">
             {logoUrl ? (
-              <>
-                <img 
-                  src={logoUrl} 
-                  alt={item.title || item.name} 
-                  className="h-20 md:h-28 lg:h-36 max-w-[260px] md:max-w-[400px] lg:max-w-[480px] object-contain object-left drop-shadow-2xl"
-                />
-                {type === 'anime' && (
-                  <p className="mt-2 text-white/90 text-sm md:text-base lg:text-lg font-bold tracking-wide drop-shadow-md">
-                    {item.title || item.name}
-                  </p>
-                )}
-              </>
+              <img
+                src={logoUrl}
+                alt={item.title || item.name}
+                className="max-h-20 md:max-h-28 lg:max-h-32 w-auto max-w-[260px] md:max-w-[380px] lg:max-w-[440px] object-contain object-left drop-shadow-[0_8px_24px_rgba(0,0,0,0.85)]"
+              />
             ) : (
-              <h2 className="text-4xl md:text-5xl lg:text-7xl font-bold tracking-tight text-white drop-shadow-lg text-left uppercase">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white drop-shadow-xl text-left">
                 {item.title || item.name}
+              </h1>
+            )}
+          </div>
+
+          {/* 2B. Metadata Row */}
+          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm font-semibold text-white/90 drop-shadow">
+            {releaseYear && (
+              <>
+                <span>{releaseYear}</span>
+                <span className="text-white/45">&bull;</span>
+              </>
+            )}
+
+            <span>
+              {type === 'anime' ? 'Anime' : type === 'tv' ? 'Series' : 'Movie'}
+            </span>
+
+            {type === 'anime' && totalAnimeEpisodes && (
+              <>
+                <span className="text-white/45">&bull;</span>
+                <span>{totalAnimeEpisodes} Episodes</span>
+              </>
+            )}
+
+            {type === 'tv' && item?.number_of_seasons && (
+              <>
+                <span className="text-white/45">&bull;</span>
+                <span>
+                  {item.number_of_seasons} Season{item.number_of_seasons > 1 ? 's' : ''}
+                </span>
+              </>
+            )}
+
+            {type === 'movie' && item?.runtime ? (
+              <>
+                <span className="text-white/45">&bull;</span>
+                <span>
+                  {Math.floor(item.runtime / 60)}h {item.runtime % 60}m
+                </span>
+              </>
+            ) : null}
+
+            {primaryGenre && (
+              <>
+                <span className="text-white/45">&bull;</span>
+                <span>{primaryGenre}</span>
+              </>
+            )}
+
+            <span className="ml-1 px-1.5 py-0.5 text-[10px] md:text-[11px] font-bold tracking-wider uppercase border border-white/40 rounded-[3px] text-white/95 leading-none">
+              HD
+            </span>
+          </div>
+
+          {/* 2C. Content Rating & Advisories Row */}
+          <div className="flex flex-wrap items-center gap-2.5 text-xs md:text-[13px] text-white/75 drop-shadow">
+            <span className="px-2 py-0.5 bg-white/15 border border-white/25 rounded-[3px] text-[11px] font-bold text-white leading-tight">
+              {maturityRating}
+            </span>
+            {advisories && <span className="text-white/80 font-medium">{advisories}</span>}
+          </div>
+
+          {/* 2D. Episode Title (if applicable) & Description / Synopsis */}
+          <div className="flex flex-col gap-1 mt-1 mb-1">
+            {activeEpisodeTitle && (
+              <h2 className="text-sm md:text-base font-bold text-white drop-shadow">
+                {activeEpisodeTitle}
               </h2>
             )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm lg:text-[15px] text-white/90 drop-shadow-md font-medium">
-            <span className="border border-white/40 text-white px-1.5 py-0.5 rounded-sm text-[10px] md:text-xs leading-none">
-              {item.adult ? '18+' : '13+'}
-            </span>
-            {type === 'movie' && item.release_date && (
-              <>
-                <span>{new Date(item.release_date).getFullYear()}</span>
-                <span className="text-white/40">&bull;</span>
-                {item.runtime && (
-                  <>
-                    <span>{Math.floor(item.runtime / 60)}h {item.runtime % 60}m</span>
-                    <span className="text-white/40">&bull;</span>
-                  </>
-                )}
-              </>
-            )}
-            {type === 'tv' && item.first_air_date && (
-              <>
-                <span>{new Date(item.first_air_date).getFullYear()}</span>
-                <span className="text-white/40">&bull;</span>
-              </>
-            )}
-            {type === 'anime' && (
-              <>
-                <span>{item.first_air_date ? new Date(item.first_air_date).getFullYear() : (item.release_date ? new Date(item.release_date).getFullYear() : '')}</span>
-                <span className="text-white/40">&bull;</span>
-              </>
-            )}
-            
-            <div className="flex items-center gap-1.5">
-              {item.genres?.slice(0, 3).map((g, i) => (
-                <span key={g.id}>
-                  {g.name}
-                  {i < Math.min(item.genres.length, 3) - 1 ? ', ' : ''}
-                </span>
-              ))}
-            </div>
-
-            {type === 'tv' && item.number_of_seasons && (
-              <>
-                <span className="text-white/40">&bull;</span>
-                <span>{item.number_of_seasons} Season{item.number_of_seasons > 1 ? 's' : ''}</span>
-              </>
-            )}
-            {type === 'anime' && item.animeGroup && item.animeGroup.seasons && item.animeGroup.seasons.length > 1 && (
-              <>
-                <span className="text-white/40">&bull;</span>
-                <span>{item.animeGroup.seasons.length} Seasons</span>
-              </>
+            {overviewText && (
+              <p className="text-xs md:text-sm lg:text-[15px] text-white/85 leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md font-normal max-w-[480px]">
+                {overviewText}
+              </p>
             )}
           </div>
-          
-          {overviewText && (
-            <p className="text-xs md:text-sm lg:text-[15px] text-white/80 leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-lg font-normal mb-1 md:mb-3 max-w-2xl lg:max-w-3xl">
-              {overviewText}
-            </p>
-          )}
 
-          <div className="flex flex-wrap items-center gap-3 w-full pb-1 pointer-events-auto">
-            <button onClick={() => onPlay && onPlay()} className="bg-white text-black px-6 py-2.5 md:px-8 md:py-3.5 rounded-full font-bold flex items-center gap-2 md:gap-3 transition-transform hover:scale-105 shadow-2xl text-sm md:text-[15px]">
-              <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black" /> 
-              Watch Now
+          {/* 3E. Rating & Library Controls (Subtle Icon Row above Primary Action, matching reference) */}
+          <div className="flex items-center gap-2.5 pt-1 pointer-events-auto">
+            <button
+              onClick={() => handleFeedback('dislike')}
+              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
+                feedback === 'dislike'
+                  ? 'bg-white/20 border-white text-white'
+                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
+              }`}
+              aria-label="Dislike"
+              title="Not for me"
+            >
+              <ThumbsDown
+                className={`w-4 h-4 ${feedback === 'dislike' ? 'fill-current' : ''}`}
+              />
             </button>
-            
-            <div className="flex items-center gap-2 md:gap-3">
-              <button 
-                className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group ml-1"
-                aria-label="Add to List"
-              >
-                <Plus className="w-4 h-4 md:w-5 md:h-5 text-white" />
-              </button>
-              <button 
-                onClick={() => setFeedback(feedback === 'like' ? null : 'like')}
-                className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
-                aria-label="Like"
-              >
-                <ThumbsUp className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'like' ? 'fill-current text-white' : 'text-white'}`} />
-              </button>
-              <button 
-                onClick={() => setFeedback(feedback === 'dislike' ? null : 'dislike')}
-                className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
-                aria-label="Dislike"
-              >
-                <ThumbsDown className={`w-4 h-4 md:w-5 md:h-5 ${feedback === 'dislike' ? 'fill-current text-white' : 'text-white'}`} />
-              </button>
-            </div>
+
+            <button
+              onClick={() => handleFeedback('like')}
+              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
+                feedback === 'like'
+                  ? 'bg-white/20 border-white text-white'
+                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
+              }`}
+              aria-label="Like"
+              title="I like this"
+            >
+              <ThumbsUp
+                className={`w-4 h-4 ${feedback === 'like' ? 'fill-current' : ''}`}
+              />
+            </button>
+
+            <button
+              onClick={handleToggleLibrary}
+              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
+                inLibrary
+                  ? 'bg-white/20 border-white text-white'
+                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
+              }`}
+              aria-label={inLibrary ? 'Remove from Library' : 'Add to Library'}
+              title={inLibrary ? 'In My List' : 'Add to My List'}
+            >
+              {inLibrary ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            </button>
           </div>
 
+          {/* 3A–3D. Watching Controls Stack */}
+          <div className="flex flex-col items-start gap-2.5 w-full max-w-[360px] pt-1 pointer-events-auto">
+            {/* Primary Action Button (Prominent White Pill Button) */}
+            <button
+              onClick={() => onPlay && onPlay()}
+              className="w-full bg-white hover:bg-white/90 text-black px-6 py-3 md:py-3.5 rounded-full font-bold flex items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-[0.99] shadow-[0_8px_30px_rgba(0,0,0,0.6)] text-sm md:text-[15px]"
+            >
+              <span className="flex items-center gap-3">
+                <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black shrink-0" />
+                <span>{primaryButtonLabel}</span>
+              </span>
+
+              {hasProgress && (
+                <div className="w-14 md:w-16 h-1 bg-black/20 rounded-full overflow-hidden shrink-0">
+                  <div
+                    className="h-full bg-[#E50914] rounded-full"
+                    style={{
+                      width: `${Math.min(95, Math.max(15, Math.round(progressPercent * 100)))}%`,
+                    }}
+                  />
+                </div>
+              )}
+            </button>
+
+            {/* Secondary Action: Play From Beginning */}
+            <button
+              onClick={() => onPlayFromBeginning && onPlayFromBeginning()}
+              className="w-full px-4 py-2.5 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all flex items-center gap-3 text-sm md:text-[15px] font-medium"
+            >
+              <RotateCcw className="w-4 h-4 md:w-5 md:h-5 text-white/80 shrink-0" />
+              <span>Play From Beginning</span>
+            </button>
+
+            {/* More Episodes Action (Shown for Anime and TV Series ONLY — Never for Movies) */}
+            {(type === 'anime' || type === 'tv') && (
+              <button
+                onClick={() => onOpenMoreEpisodes && onOpenMoreEpisodes()}
+                className="w-full px-4 py-2.5 rounded-full text-white/85 hover:text-white hover:bg-white/10 transition-all flex items-center gap-3 text-sm md:text-[15px] font-medium"
+              >
+                <Layers className="w-4 h-4 md:w-5 md:h-5 text-white/80 shrink-0" />
+                <span>More Episodes</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
-      {/* Provider iframe removed, now in PlayerPage */}
     </div>
   );
 }

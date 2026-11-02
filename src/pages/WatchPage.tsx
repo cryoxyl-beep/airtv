@@ -5,10 +5,10 @@ import { fetchDetails, fetchTVSeason, getSeedItem } from '../api/tmdb';
 import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import WatchPageContent from '../components/WatchPage';
-import SeasonSelector from '../components/SeasonSelector';
-import EpisodeList from '../components/EpisodeList';
+import MoreEpisodesPopover from '../components/MoreEpisodesPopover';
 import { ArrowLeft } from 'lucide-react';
 import WatchPageSkeleton from '../components/WatchPageSkeleton';
+import { getWatchProgress, saveWatchProgress } from '../utils/preferences';
 
 interface WatchPageProps {
   type: 'movie' | 'tv' | 'anime';
@@ -19,21 +19,66 @@ export default function WatchPage({ type }: WatchPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const initialSeed = (location.state as any)?.item || (id ? getSeedItem(type, parseInt(id, 10)) : null);
+  const initialSeed =
+    (location.state as any)?.item || (id ? getSeedItem(type, parseInt(id, 10)) : null);
 
   const [data, setData] = useState<any>(initialSeed);
+
+  // Resolve initial watch progress from localStorage or URL params
+  const savedProgress = id ? getWatchProgress(type, id) : null;
+  const urlSeason = season ? parseInt(season, 10) : undefined;
+  const urlEpisode = episode ? parseInt(episode, 10) : undefined;
+
+  const hasExplicitUrlProgress =
+    (urlSeason !== undefined && urlSeason > 1) ||
+    (urlEpisode !== undefined && urlEpisode > 1);
+
+  const resolvedSeason =
+    type === 'tv'
+      ? hasExplicitUrlProgress
+        ? urlSeason || 1
+        : savedProgress?.season || urlSeason || 1
+      : 1;
+
+  const resolvedEpisode =
+    type === 'movie'
+      ? 1
+      : hasExplicitUrlProgress
+      ? urlEpisode || 1
+      : savedProgress?.episode || urlEpisode || 1;
+
+  const hasProgress = Boolean(savedProgress || hasExplicitUrlProgress);
+  const progressPercent = savedProgress?.progress ?? (hasExplicitUrlProgress ? 0.35 : 0);
+
+  const [selectedPopoverSeason, setSelectedPopoverSeason] = useState<number>(resolvedSeason);
+  const [showMoreEpisodes, setShowMoreEpisodes] = useState(false);
+
   const [seasonData, setSeasonData] = useState<any>(() => {
-    if (type === 'tv' && initialSeed?.['season/1'] && (!season || parseInt(season, 10) === 1)) {
+    if (type === 'tv' && initialSeed?.['season/1'] && resolvedSeason === 1) {
       return initialSeed['season/1'];
     }
     return null;
   });
+  const [popoverSeasonData, setPopoverSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(!initialSeed);
   const [loadingEpisodes, setLoadingEpisodes] = useState(type === 'tv' || type === 'anime');
   const [error, setError] = useState(false);
 
-  const activeSeason = season ? parseInt(season, 10) : 1;
-  const activeEpisode = episode ? parseInt(episode, 10) : 1;
+  // Sync selectedPopoverSeason when resolvedSeason changes
+  useEffect(() => {
+    setSelectedPopoverSeason(resolvedSeason);
+  }, [resolvedSeason, id]);
+
+  // If URL explicitly specifies progress > S1E1, persist it so Resume stays consistent
+  useEffect(() => {
+    if (id && hasExplicitUrlProgress) {
+      saveWatchProgress(type, id, {
+        season: type === 'tv' ? urlSeason || 1 : undefined,
+        episode: urlEpisode || 1,
+        progress: savedProgress?.progress ?? 0.35,
+      });
+    }
+  }, [id, type, hasExplicitUrlProgress, urlSeason, urlEpisode]);
 
   useEffect(() => {
     let mounted = true;
@@ -72,15 +117,17 @@ export default function WatchPage({ type }: WatchPageProps) {
             const numEpisodes = details.number_of_episodes || 12;
             const streamEps = details.anilist_raw?.streamingEpisodes;
 
-            // Immediately show fast provisional episodes if streamingEpisodes exist while TVDB/Jikan resolves
+            // Fast provisional episodes while TVDB/Jikan resolves
             if (Array.isArray(streamEps) && streamEps.length > 0 && !seasonData) {
               setSeasonData({
                 episodes: streamEps.map((se: any, idx: number) => ({
                   episode_number: idx + 1,
-                  name: se.title ? se.title.replace(/^Episode\s+\d+\s*-\s*/i, '') : `Episode ${idx + 1}`,
+                  name: se.title
+                    ? se.title.replace(/^Episode\s+\d+\s*-\s*/i, '')
+                    : `Episode ${idx + 1}`,
                   overview: '',
-                  still_path: se.thumbnail || details.backdrop_path
-                }))
+                  still_path: se.thumbnail || details.backdrop_path,
+                })),
               });
             }
 
@@ -98,10 +145,11 @@ export default function WatchPage({ type }: WatchPageProps) {
             setError(true);
           }
         } else if (type === 'tv') {
-          // Run fetchDetails (which includes season/1) and target season in parallel if targetSeason !== 1
           const [details, explicitSeason] = await Promise.all([
             fetchDetails(numericId, 'tv'),
-            activeSeason !== 1 ? fetchTVSeason(numericId, activeSeason).catch(() => null) : Promise.resolve(null)
+            resolvedSeason !== 1
+              ? fetchTVSeason(numericId, resolvedSeason).catch(() => null)
+              : Promise.resolve(null),
           ]);
 
           if (!mounted) return;
@@ -109,7 +157,7 @@ export default function WatchPage({ type }: WatchPageProps) {
           setLoading(false);
 
           const seasons = details.seasons || [];
-          let targetSeason = activeSeason;
+          let targetSeason = resolvedSeason;
           const seasonExists = seasons.find((s: any) => s.season_number === targetSeason);
 
           if (!seasonExists && seasons.length > 0) {
@@ -122,16 +170,21 @@ export default function WatchPage({ type }: WatchPageProps) {
 
           if (targetSeason === 1 && details['season/1']) {
             setSeasonData(details['season/1']);
+            setPopoverSeasonData(details['season/1']);
             setLoadingEpisodes(false);
           } else if (explicitSeason) {
             setSeasonData(explicitSeason);
+            setPopoverSeasonData(explicitSeason);
             setLoadingEpisodes(false);
           } else {
             try {
               const sData = await fetchTVSeason(numericId, targetSeason);
-              if (mounted) setSeasonData(sData);
+              if (mounted) {
+                setSeasonData(sData);
+                setPopoverSeasonData(sData);
+              }
             } catch (e) {
-              console.error("fetchTVSeason failed:", e);
+              console.error('fetchTVSeason failed:', e);
             } finally {
               if (mounted) setLoadingEpisodes(false);
             }
@@ -145,7 +198,7 @@ export default function WatchPage({ type }: WatchPageProps) {
           }
         }
       } catch (err: any) {
-        console.error("Failed to load watch data:", err.message || err);
+        console.error('Failed to load watch data:', err.message || err);
         if (mounted && !seed) {
           setError(true);
         }
@@ -163,37 +216,44 @@ export default function WatchPage({ type }: WatchPageProps) {
     };
   }, [id, type]);
 
-  // Load season data when activeSeason changes
+  // Load season data for the More Episodes popover when switching seasons in TV mode
   useEffect(() => {
-    if (type === 'tv' && id && data) {
-      const numericId = parseInt(id, 10);
-      if (activeSeason === 1 && data['season/1']) {
-        setSeasonData(data['season/1']);
-        return;
-      }
-      let mounted = true;
-      const loadSeason = async () => {
-        try {
-          const seasonRes = await fetchTVSeason(numericId, activeSeason);
-          if (mounted) setSeasonData(seasonRes);
-        } catch (e: any) {
-          console.error("fetchTVSeason failed:", e);
-        }
-      };
-      loadSeason();
-      return () => {
-        mounted = false;
-      };
+    if (type !== 'tv' || !id || !data) return;
+    if (selectedPopoverSeason === resolvedSeason && seasonData) {
+      setPopoverSeasonData(seasonData);
+      return;
     }
-  }, [activeSeason, id, type, data]);
+    if (selectedPopoverSeason === 1 && data['season/1']) {
+      setPopoverSeasonData(data['season/1']);
+      return;
+    }
+
+    let mounted = true;
+    setLoadingEpisodes(true);
+    fetchTVSeason(parseInt(id, 10), selectedPopoverSeason)
+      .then((res) => {
+        if (mounted) {
+          setPopoverSeasonData(res);
+          setLoadingEpisodes(false);
+        }
+      })
+      .catch((e) => {
+        console.error('fetchTVSeason failed:', e);
+        if (mounted) setLoadingEpisodes(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedPopoverSeason, resolvedSeason, id, type, data, seasonData]);
 
   if (loading && !data) {
     return (
-      <div className={`min-h-screen bg-black font-sans text-white relative ${(type === 'tv' || type === 'anime') ? 'pb-20' : 'overflow-hidden'}`}>
+      <div className="min-h-screen bg-black font-sans text-white relative overflow-hidden">
         <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
           <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
         </div>
-        <div className="w-full relative bg-black pt-0 lg:pt-0">
+        <div className="w-full relative bg-black">
           <WatchPageSkeleton type={type === 'anime' ? 'tv' : type} />
         </div>
       </div>
@@ -204,8 +264,8 @@ export default function WatchPage({ type }: WatchPageProps) {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center text-white gap-4">
         <p className="text-xl">Content unavailable.</p>
-        <button 
-          onClick={() => navigate(-1)} 
+        <button
+          onClick={() => navigate(-1)}
           className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-md transition-colors"
         >
           Go Back
@@ -222,27 +282,64 @@ export default function WatchPage({ type }: WatchPageProps) {
     }
   };
 
-  const handleSeasonChange = (newSeason: number) => {
-    if (type === 'tv') {
-      navigate(`/watch/tv/${id}/${newSeason}/1`, { replace: false });
-    }
-  };
-
-  const handleEpisodeChange = (newEpisode: number) => {
-    if (type === 'tv') {
-      navigate(`/play/tv/${id}/${activeSeason}/${newEpisode}`, { replace: false });
+  const handlePrimaryPlay = () => {
+    if (!id) return;
+    if (type === 'movie') {
+      saveWatchProgress('movie', id, { progress: 0.35 });
+      navigate(`/play/movie/${id}`);
+    } else if (type === 'tv') {
+      saveWatchProgress('tv', id, {
+        season: resolvedSeason,
+        episode: resolvedEpisode,
+        progress: 0.35,
+      });
+      navigate(`/play/tv/${id}/${resolvedSeason}/${resolvedEpisode}`);
     } else if (type === 'anime') {
-      navigate(`/play/anime/${id}/${newEpisode}`, { replace: false });
+      saveWatchProgress('anime', id, {
+        episode: resolvedEpisode,
+        progress: 0.35,
+      });
+      navigate(`/play/anime/${id}/${resolvedEpisode}`);
     }
   };
 
-  const showBottomSection = (type === 'tv' || type === 'anime');
+  const handlePlayFromBeginning = () => {
+    if (!id) return;
+    if (type === 'movie') {
+      saveWatchProgress('movie', id, { progress: 0.05 });
+      navigate(`/play/movie/${id}`);
+    } else if (type === 'tv') {
+      saveWatchProgress('tv', id, { season: 1, episode: 1, progress: 0.1 });
+      navigate(`/play/tv/${id}/1/1`);
+    } else if (type === 'anime') {
+      saveWatchProgress('anime', id, { episode: 1, progress: 0.1 });
+      navigate(`/play/anime/${id}/1`);
+    }
+  };
+
+  const handleEpisodeSelectFromPopover = (epNum: number, sNum?: number) => {
+    if (!id) return;
+    setShowMoreEpisodes(false);
+    if (type === 'tv') {
+      const targetS = sNum || selectedPopoverSeason || resolvedSeason;
+      saveWatchProgress('tv', id, { season: targetS, episode: epNum, progress: 0.35 });
+      navigate(`/play/tv/${id}/${targetS}/${epNum}`);
+    } else if (type === 'anime') {
+      saveWatchProgress('anime', id, { episode: epNum, progress: 0.35 });
+      navigate(`/play/anime/${id}/${epNum}`);
+    }
+  };
+
+  const activePopoverEpisodes =
+    type === 'anime'
+      ? seasonData?.episodes || []
+      : popoverSeasonData?.episodes || seasonData?.episodes || [];
 
   return (
-    <div className={`min-h-screen bg-black font-sans text-white relative ${showBottomSection ? 'pb-20' : 'overflow-hidden'}`}>
-      {/* Top Nav (Minimal) */}
-      <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
-        <button 
+    <div className="min-h-screen bg-black font-sans text-white relative overflow-hidden">
+      {/* Minimal Top Back Button */}
+      <div className="absolute top-0 left-0 p-6 z-40 flex items-center gap-4">
+        <button
           onClick={handleBack}
           className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
           aria-label="Go Back"
@@ -251,63 +348,42 @@ export default function WatchPage({ type }: WatchPageProps) {
         </button>
       </div>
 
-      {/* Main Video Area */}
-      <div className="w-full relative bg-black pt-0 lg:pt-0">
-        <WatchPageContent 
-          item={data} 
-          type={type} 
-          seasonNumber={(type === 'tv' || type === 'anime') ? activeSeason : undefined}
-          episodeNumber={(type === 'tv' || type === 'anime') ? activeEpisode : undefined}
-          seasonData={(type === 'tv' || type === 'anime') ? seasonData : undefined}
-          forceFullScreen={!showBottomSection}
-          onPlay={() => {
-            if (type === 'movie') {
-              navigate(`/play/movie/${id}`);
-            } else if (type === 'tv') {
-              navigate(`/play/tv/${id}/${activeSeason}/${activeEpisode}`);
-            } else if (type === 'anime') {
-              navigate(`/play/anime/${id}/${activeEpisode}`);
-            }
+      {/* Full-Viewport Cinematic Watch Page */}
+      <div className="w-full relative bg-black">
+        <WatchPageContent
+          item={data}
+          type={type}
+          seasonNumber={type === 'tv' ? resolvedSeason : 1}
+          episodeNumber={type === 'tv' || type === 'anime' ? resolvedEpisode : 1}
+          seasonData={type === 'tv' || type === 'anime' ? seasonData : undefined}
+          hasProgress={hasProgress}
+          progressPercent={progressPercent}
+          onPlay={handlePrimaryPlay}
+          onPlayFromBeginning={handlePlayFromBeginning}
+          onOpenMoreEpisodes={() => {
+            setSelectedPopoverSeason(resolvedSeason);
+            setShowMoreEpisodes(true);
           }}
         />
       </div>
 
-      {/* Details & Episode Selection Area */}
-      {showBottomSection && (
-        <div className="max-w-[1600px] mx-auto px-6 md:px-12 pb-10 pt-0">
-          <div className="mt-0">
-            {/* Season Selector */}
-            {type === 'tv' && data.seasons && (
-              <div className="mb-8">
-                <SeasonSelector 
-                  seasons={data.seasons.filter((s: any) => s.season_number > 0)} 
-                  currentSeason={activeSeason}
-                  onSeasonChange={handleSeasonChange}
-                />
-              </div>
-            )}
-
-            {seasonData?.episodes?.length > 0 ? (
-              <>
-                <div className="text-white/60 mb-6 font-medium text-lg">
-                  {seasonData.episodes.length} Episodes
-                </div>
-                <EpisodeList 
-                  episodes={seasonData.episodes} 
-                  currentEpisode={episode ? parseInt(episode, 10) : undefined}
-                  onEpisodeSelect={handleEpisodeChange}
-                  isAnime={type === 'anime'}
-                />
-              </>
-            ) : loadingEpisodes ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10 mt-6">
-                {[...Array(8)].map((_, i) => (
-                  <div key={i} className="aspect-video bg-white/5 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
+      {/* Interactive More Episodes Popover (Anime & TV Series Only) */}
+      {(type === 'tv' || type === 'anime') && (
+        <MoreEpisodesPopover
+          isOpen={showMoreEpisodes}
+          onClose={() => setShowMoreEpisodes(false)}
+          type={type}
+          title={data.title || data.name || 'Episodes'}
+          backdropPath={data.backdrop_path}
+          seasons={type === 'tv' ? data.seasons || [] : undefined}
+          selectedSeason={selectedPopoverSeason}
+          activePlayingSeason={resolvedSeason}
+          currentEpisode={resolvedEpisode}
+          episodes={activePopoverEpisodes}
+          loadingEpisodes={loadingEpisodes}
+          onSeasonChange={(newSeason) => setSelectedPopoverSeason(newSeason)}
+          onEpisodeSelect={handleEpisodeSelectFromPopover}
+        />
       )}
     </div>
   );
