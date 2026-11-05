@@ -86,37 +86,34 @@ export default function PlatformRow() {
         containIntrinsicSize: '1px 180px',
       }}
     >
-      <div className="flex items-center justify-between px-4 sm:px-8 lg:px-[56px] mb-2 sm:mb-3">
-        <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white/95 tracking-tight">
+      <div className="flex items-center justify-center px-4 mb-2 sm:mb-3 text-center">
+        <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white/95 tracking-tight text-center">
           Browse by Platform
         </h2>
       </div>
       <div
         ref={rowRef}
-        className="flex items-center overflow-x-auto scrollbar-hide gap-4 sm:gap-6 py-3 scroll-smooth"
+        className="w-full overflow-x-auto scrollbar-hide py-3 scroll-smooth"
       >
-        <div className="w-4 sm:w-8 lg:w-[56px] shrink-0" />
-        
-        {platforms.map((platform) => (
-          <div
-            key={platform.id}
-            onClick={() => navigate(`/browse/${platform.slug}`)}
-            className="flex-shrink-0 cursor-pointer flex flex-col items-center gap-3 group w-24 md:w-28"
-          >
-            <div className="w-full aspect-square rounded-2xl bg-[#1a1a1a] border border-white/5 shadow-md group-hover:bg-[#262626] group-hover:border-white/20 group-hover:-translate-y-1 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.5)] transition-all duration-300 flex items-center justify-center p-3 md:p-4">
-              <img
-                src={platform.logo}
-                alt={platform.name}
-                className="max-h-[48px] md:max-h-[56px] max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
-                draggable={false}
-                loading="lazy"
-              />
+        <div className="flex items-center justify-center min-w-max mx-auto gap-4 sm:gap-6 px-4 sm:px-8">
+          {platforms.map((platform) => (
+            <div
+              key={platform.id}
+              onClick={() => navigate(`/browse/${platform.slug}`)}
+              className="flex-shrink-0 cursor-pointer flex flex-col items-center gap-3 group w-24 md:w-28"
+            >
+              <div className="w-full aspect-square rounded-2xl bg-[#1a1a1a] border border-white/5 shadow-md group-hover:bg-[#262626] group-hover:border-white/20 group-hover:-translate-y-1 group-hover:shadow-[0_8px_20px_rgba(0,0,0,0.5)] transition-all duration-300 flex items-center justify-center p-3 md:p-4">
+                <img
+                  src={platform.logo}
+                  alt={platform.name}
+                  className="max-h-[48px] md:max-h-[56px] max-w-full object-contain transition-transform duration-300 group-hover:scale-105"
+                  draggable={false}
+                  loading="lazy"
+                />
+              </div>
             </div>
-            
-          </div>
-        ))}
-
-        <div className="w-4 sm:w-8 lg:w-[56px] shrink-0" />
+          ))}
+        </div>
       </div>
     </div>
   );

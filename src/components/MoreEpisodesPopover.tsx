@@ -233,7 +233,7 @@ export default function MoreEpisodesPopover({
                 No episodes available.
               </div>
             ) : (
-              <div className="space-y-3 pb-[50vh]">
+              <div className="space-y-3 pb-2">
                 {episodes.map((ep: any) => {
                   const epNum = ep.episode_number;
                   // ONLY show CURRENT badge if user has actual progress and this matches current episode
