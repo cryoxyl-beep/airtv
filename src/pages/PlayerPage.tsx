@@ -9,7 +9,7 @@ import AnimeVidstackPlayer from '../components/AnimeVidstackPlayer';
 import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
 import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
-import { ArrowLeft, ListVideo, RefreshCw } from 'lucide-react';
+import { ListVideo, RefreshCw } from 'lucide-react';
 
 export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' | 'anime' }) {
   const { type: paramType, id, season, episode } = useParams();
@@ -337,18 +337,9 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Top Bar Navigation: Centered in the top middle center section */}
+      {/* Top Bar Navigation: Server Selection and Episode Selector centered at top */}
       <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-50 flex items-center justify-center pointer-events-none">
-        <div className="flex items-center gap-3 md:gap-4 pointer-events-auto">
-          {/* Back Button */}
-          <button 
-            onClick={() => navigate(-1)}
-            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
-            aria-label="Go Back"
-          >
-            <ArrowLeft size={22} className="text-white group-hover:-translate-x-1 transition-transform" />
-          </button>
-
+        <div className="flex items-center gap-2.5 md:gap-3 pointer-events-auto">
           {/* Server/Provider Selector */}
           <div className="relative flex items-center">
             <select
@@ -358,7 +349,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                 setVidriftError(null);
                 setAnimeStreamError(null);
               }}
-              className="bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md text-white rounded-full pl-5 pr-10 py-2.5 outline-none font-medium appearance-none hover:bg-[#252525]/90 transition-all focus:ring-2 focus:ring-white/20 cursor-pointer text-sm"
+              className="bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md text-white rounded-full pl-5 pr-10 py-2.5 outline-none font-medium appearance-none transition-all focus:ring-1 focus:ring-white/20 cursor-pointer text-xs md:text-sm"
             >
               {type === 'anime' ? (
                 <>
@@ -388,7 +379,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
           {showEpisodesButton && (
             <button
               onClick={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
-              className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
+              className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer"
               aria-label="Episodes"
             >
               <ListVideo className="w-5 h-5 text-white" />
