@@ -7,6 +7,8 @@ export interface WatchProgressData {
   season?: number;
   episode?: number;
   progress: number; // 0 to 1
+  currentTime?: number;
+  duration?: number;
   updatedAt: number;
 }
 
@@ -45,13 +47,25 @@ export function getWatchProgress(type: string, id: string | number): WatchProgre
 export function saveWatchProgress(
   type: string,
   id: string | number,
-  data: { season?: number; episode?: number; progress?: number }
+  data: { season?: number; episode?: number; progress?: number; currentTime?: number; duration?: number }
 ) {
   try {
+    const existing = getWatchProgress(type, id);
+    
+    // Do not overwrite existing progress with zero during initial player load
+    let newProgress = data.progress;
+    if (newProgress === undefined) {
+      newProgress = existing?.progress ?? 0.35;
+    } else if (newProgress === 0 && existing?.progress && existing.progress > 0) {
+      newProgress = existing.progress;
+    }
+
     const record: WatchProgressData = {
-      season: data.season,
-      episode: data.episode,
-      progress: data.progress ?? 0.35,
+      season: data.season ?? existing?.season,
+      episode: data.episode ?? existing?.episode,
+      progress: newProgress,
+      currentTime: data.currentTime ?? existing?.currentTime,
+      duration: data.duration ?? existing?.duration,
       updatedAt: Date.now(),
     };
     localStorage.setItem(`${WATCH_PROGRESS_PREFIX}${type}_${id}`, JSON.stringify(record));
