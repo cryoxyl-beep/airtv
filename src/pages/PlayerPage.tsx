@@ -5,9 +5,11 @@ import { fetchDetails, fetchTVSeason, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import EpisodeOverlay from '../components/EpisodeOverlay';
+import AnimeVidstackPlayer from '../components/AnimeVidstackPlayer';
+import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
 import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
-import { ArrowLeft, ListVideo } from 'lucide-react';
+import { ArrowLeft, ListVideo, RefreshCw } from 'lucide-react';
 
 export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' | 'anime' }) {
   const { type: paramType, id, season, episode } = useParams();
@@ -19,9 +21,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
-  const [provider, setProvider] = useState<Provider>('vidrift');
+  const [provider, setProvider] = useState<Provider>(type === 'anime' ? 'miyoro' : 'vidrift');
   const [vidriftError, setVidriftError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Dedicated Native Anime HLS State (Server: Miyoro)
+  const [animeStream, setAnimeStream] = useState<AnimeStreamResult | null>(null);
+  const [animeStreamLoading, setAnimeStreamLoading] = useState<boolean>(false);
+  const [animeStreamError, setAnimeStreamError] = useState<string | null>(null);
 
   const activeSeason = type === 'tv' ? (season ? parseInt(season, 10) : 1) : undefined;
   const activeEpisode = episode ? parseInt(episode, 10) : 1;
@@ -35,6 +42,37 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
       });
     }
   }, [id, type, activeSeason, activeEpisode]);
+
+  // Fetch native anime HLS stream with Anivault API when Server: Miyoro is selected
+  useEffect(() => {
+    if (type !== 'anime' || !id || provider !== 'miyoro') return;
+
+    let isMounted = true;
+    const controller = new AbortController();
+
+    setAnimeStreamLoading(true);
+    setAnimeStreamError(null);
+
+    fetchAnivaultStream(id, activeEpisode, undefined, controller.signal)
+      .then((result) => {
+        if (!isMounted) return;
+        setAnimeStream(result);
+        setAnimeStreamLoading(false);
+      })
+      .catch((err) => {
+        if (!isMounted || controller.signal.aborted) return;
+        console.error('Failed to load anime HLS stream from Anivault:', err);
+        setAnimeStreamError(
+          'Unable to load Miyoro native video stream. You can retry or switch to VidRift / other servers above.'
+        );
+        setAnimeStreamLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [type, id, activeEpisode, provider]);
 
   // Load media details and season/episode info
   useEffect(() => {
@@ -172,6 +210,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
           break;
         }
 
+        case 'vidrift:state': {
+          iframeRef.current?.contentWindow?.postMessage(
+            { type: 'vidrift:exit-control', show: false },
+            'https://embed.vidrift.net'
+          );
+          break;
+        }
+
         default:
           break;
       }
@@ -186,7 +232,13 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     const targetWin = iframeRef.current?.contentWindow;
     if (!targetWin) return;
 
-    // 1. Send resume message if stored progress with currentTime exists
+    // 1. Hide VidRift's built-in Back arrow using documented exit-control postMessage API
+    targetWin.postMessage({ type: 'vidrift:exit-control', show: false }, 'https://embed.vidrift.net');
+    setTimeout(() => {
+      targetWin.postMessage({ type: 'vidrift:exit-control', show: false }, 'https://embed.vidrift.net');
+    }, 250);
+
+    // 2. Send resume message if stored progress with currentTime exists
     if (id && type) {
       const saved = getWatchProgress(type, id);
       if (saved?.currentTime && saved.currentTime > 5) {
@@ -197,7 +249,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
       }
     }
 
-    // 2. Synchronize Next Up episode info
+    // 3. Synchronize Next Up episode info
     if (seasonData?.episodes) {
       const currIdx = seasonData.episodes.findIndex(
         (e: any) => e.episode_number === activeEpisode
@@ -222,7 +274,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
       }
     }
 
-    // 3. Request initial playback state
+    // 4. Request initial playback state
     targetWin.postMessage({ type: 'vidrift:get-state' }, 'https://embed.vidrift.net');
   };
 
@@ -285,36 +337,41 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Top Bar Navigation */}
-      <div className="absolute top-0 left-0 right-0 p-6 z-50 flex items-center justify-between pointer-events-none">
-        <button 
-          onClick={() => navigate(-1)}
-          className="pointer-events-auto w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
-          aria-label="Go Back"
-        >
-          <ArrowLeft size={24} className="text-white group-hover:-translate-x-1 transition-transform" />
-        </button>
+      {/* Top Bar Navigation: Centered in the top middle center section */}
+      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-50 flex items-center justify-center pointer-events-none">
+        <div className="flex items-center gap-3 md:gap-4 pointer-events-auto">
+          {/* Back Button */}
+          <button 
+            onClick={() => navigate(-1)}
+            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
+            aria-label="Go Back"
+          >
+            <ArrowLeft size={22} className="text-white group-hover:-translate-x-1 transition-transform" />
+          </button>
 
-        <div className="flex items-center gap-4">
           {/* Server/Provider Selector */}
-          <div className="relative pointer-events-auto flex items-center">
+          <div className="relative flex items-center">
             <select
               value={provider}
               onChange={(e) => {
                 setProvider(e.target.value as Provider);
                 setVidriftError(null);
+                setAnimeStreamError(null);
               }}
               className="bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md text-white rounded-full pl-5 pr-10 py-2.5 outline-none font-medium appearance-none hover:bg-[#252525]/90 transition-all focus:ring-2 focus:ring-white/20 cursor-pointer text-sm"
             >
-              <option value="vidrift">Server: VidRift</option>
-              <option value="vidnest">Server: Vidnest</option>
               {type === 'anime' ? (
                 <>
+                  <option value="miyoro">Server: Miyoro</option>
+                  <option value="vidrift">Server: VidRift</option>
+                  <option value="vidnest">Server: Vidnest</option>
                   <option value="origami">Server: Origami</option>
                   <option value="animepahe">Server: AnimePahe</option>
                 </>
               ) : (
                 <>
+                  <option value="vidrift">Server: VidRift</option>
+                  <option value="vidnest">Server: Vidnest</option>
                   <option value="cinesrc">Server: CineSrc</option>
                   <option value="vidfast">Server: VidFast</option>
                   <option value="movies111">Server: 111Movies</option>
@@ -327,10 +384,11 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
             </div>
           </div>
 
+          {/* Episode Selector Button */}
           {showEpisodesButton && (
             <button
               onClick={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
-              className="pointer-events-auto w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
+              className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group cursor-pointer"
               aria-label="Episodes"
             >
               <ListVideo className="w-5 h-5 text-white" />
@@ -339,8 +397,8 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         </div>
       </div>
 
-      {/* Optional Discreet Error Notification */}
-      {vidriftError && (
+      {/* Optional Discreet Error Notification for VidRift */}
+      {vidriftError && type !== 'anime' && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 bg-[#1c1212]/95 border border-red-500/40 text-white/90 px-5 py-2.5 rounded-full text-xs md:text-sm backdrop-blur-md flex items-center gap-3 shadow-[0_8px_30px_rgba(0,0,0,0.7)] animate-in fade-in duration-200">
           <span>{vidriftError}</span>
           <button 
@@ -355,7 +413,91 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
       {/* Main Player */}
       <div className="flex-1 w-full h-full relative">
-        {providerUrl ? (
+        {type === 'anime' && provider === 'miyoro' ? (
+          animeStreamLoading ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-white">
+              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+              <p className="text-sm text-white/60 font-medium">Loading Miyoro stream...</p>
+            </div>
+          ) : animeStreamError ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
+              <p className="text-sm md:text-base text-red-400 max-w-md">{animeStreamError}</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setAnimeStreamError(null);
+                    setAnimeStreamLoading(true);
+                    fetchAnivaultStream(id!, activeEpisode)
+                      .then((res) => {
+                        setAnimeStream(res);
+                        setAnimeStreamLoading(false);
+                      })
+                      .catch(() => {
+                        setAnimeStreamLoading(false);
+                        setAnimeStreamError('Unable to connect to stream. Please switch to another server.');
+                      });
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-white text-black font-semibold text-xs md:text-sm hover:bg-white/90 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Retry</span>
+                </button>
+                <button
+                  onClick={() => setProvider('vidrift')}
+                  className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium text-xs md:text-sm border border-white/20 transition-all cursor-pointer"
+                >
+                  Switch to VidRift
+                </button>
+              </div>
+            </div>
+          ) : animeStream ? (
+            <AnimeVidstackPlayer
+              stream={animeStream}
+              title={`${mediaTitle} - Episode ${activeEpisode}`}
+              poster={posterUrl}
+              initialTime={
+                (() => {
+                  const saved = id ? getWatchProgress('anime', id) : null;
+                  return saved?.episode === activeEpisode && saved?.currentTime && saved.currentTime > 5
+                    ? saved.currentTime
+                    : 0;
+                })()
+              }
+              onProgress={(cur, dur, prog) => {
+                if (id) {
+                  saveWatchProgress('anime', id, {
+                    episode: activeEpisode,
+                    progress: prog,
+                    currentTime: cur,
+                    duration: dur,
+                  });
+                }
+              }}
+              onEnded={() => {
+                if (id) {
+                  saveWatchProgress('anime', id, {
+                    episode: activeEpisode,
+                    progress: 1.0,
+                  });
+                }
+                const nextEp = activeEpisode + 1;
+                const hasNext = seasonData?.episodes?.some(
+                  (e: any) => e.episode_number === nextEp
+                );
+                if (hasNext) {
+                  navigate(`/play/anime/${id}/${nextEp}`, { replace: true });
+                }
+              }}
+              onError={(err) => {
+                console.warn('Vidstack player playback event error:', err);
+              }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white">
+              <p>Unable to load anime video stream.</p>
+            </div>
+          )
+        ) : providerUrl ? (
           <iframe
             ref={iframeRef}
             key={`iframe-${providerUrl}`}

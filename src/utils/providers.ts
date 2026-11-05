@@ -1,4 +1,4 @@
-export type Provider = 'vidrift' | 'vidnest' | 'cinesrc' | 'vidfast' | 'movies111' | 'origami' | 'animepahe';
+export type Provider = 'miyoro' | 'vidrift' | 'vidnest' | 'cinesrc' | 'vidfast' | 'movies111' | 'origami' | 'animepahe';
 
 export interface ProviderOptions {
   title?: string;
@@ -13,6 +13,7 @@ export function buildVidriftParams(options?: ProviderOptions): string {
   params.set('brand', 'Miyoro');
   params.set('brandColor', '#ffffff');
   params.set('exit', '1');
+  params.set('hide', 'next');
   params.set('showTitle', '1');
   params.set('uiScale', '1');
   params.set('autoplay', '1');
