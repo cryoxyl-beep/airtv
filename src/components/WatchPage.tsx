@@ -1,13 +1,9 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo, fetchTrailer } from '../api/tmdb';
-import { Play, ThumbsUp, ThumbsDown, Volume2, VolumeX, Plus, Check, RotateCcw, Layers } from 'lucide-react';
+import { Play, Volume2, VolumeX, RotateCcw, Layers } from 'lucide-react';
 import {
   getVideoMutedPreference,
   setVideoMutedPreference,
-  isInLibrary,
-  toggleLibraryItem,
-  getItemRating,
-  setItemRating,
 } from '../utils/preferences';
 
 interface WatchPageProps {
@@ -18,6 +14,7 @@ interface WatchPageProps {
   seasonData?: any;
   hasProgress?: boolean;
   progressPercent?: number;
+  isPopoverOpen?: boolean;
   onPlay?: () => void;
   onPlayFromBeginning?: () => void;
   onOpenMoreEpisodes?: () => void;
@@ -59,33 +56,6 @@ function resolveMaturityRating(item: any, type: 'movie' | 'tv' | 'anime'): strin
   return type === 'anime' ? 'U/A 13+' : 'U/A 13+';
 }
 
-function resolveContentAdvisories(item: any): string | null {
-  // Check AniList tags if available
-  const rawTags = item?.anilist_raw?.tags;
-  if (Array.isArray(rawTags) && rawTags.length > 0) {
-    const relevant = rawTags
-      .filter((t: any) => !t.isMediaSpoiler && t.rank >= 60 && t.name)
-      .slice(0, 3)
-      .map((t: any) => t.name.toLowerCase());
-    if (relevant.length > 0) {
-      const text = relevant.join(', ');
-      return text.charAt(0).toUpperCase() + text.slice(1);
-    }
-  }
-
-  // Derive concise descriptors from actual genres on the item
-  const genres = (item?.genres || [])
-    .map((g: any) => (typeof g === 'string' ? g : g?.name))
-    .filter(Boolean)
-    .slice(0, 3);
-
-  if (genres.length > 0) {
-    return genres.join(', ');
-  }
-
-  return null;
-}
-
 export default function WatchPage({
   item,
   type,
@@ -94,17 +64,12 @@ export default function WatchPage({
   seasonData,
   hasProgress = false,
   progressPercent = 0.35,
+  isPopoverOpen = false,
   onPlay,
   onPlayFromBeginning,
   onOpenMoreEpisodes,
 }: WatchPageProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
-  const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(() =>
-    item?.id ? getItemRating(type, item.id) : null
-  );
-  const [inLibrary, setInLibrary] = useState<boolean>(() =>
-    item?.id ? isInLibrary(type, item.id) : false
-  );
 
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerPlaying, setTrailerPlaying] = useState(false);
@@ -120,11 +85,19 @@ export default function WatchPage({
   const cutoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (item?.id) {
-      setFeedback(getItemRating(type, item.id));
-      setInLibrary(isInLibrary(type, item.id));
+    if (!iframeRef.current?.contentWindow) return;
+    if (isPopoverOpen) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+        '*'
+      );
+    } else if (isPlayingRef.current && !trailerEnded) {
+      iframeRef.current.contentWindow.postMessage(
+        JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+        '*'
+      );
     }
-  }, [item?.id, type]);
+  }, [isPopoverOpen, trailerEnded]);
 
   useEffect(() => {
     if (!document.getElementById('youtube-iframe-api')) {
@@ -298,38 +271,12 @@ export default function WatchPage({
     );
   };
 
-  const handleFeedback = (value: 'like' | 'dislike') => {
-    const next = feedback === value ? null : value;
-    setFeedback(next);
-    if (item?.id) {
-      setItemRating(type, item.id, next);
-    }
-  };
-
-  const handleToggleLibrary = () => {
-    if (!item?.id) return;
-    const added = toggleLibraryItem(type, item.id);
-    setInLibrary(added);
-  };
-
   // Determine backdrop and current episode metadata
   const backdropPath = item?.backdrop_path;
   const isTrailerVisible = trailerPlaying && canReveal && !trailerEnded && trailerKey !== null;
 
-  const currentEpObj =
-    (type === 'tv' || type === 'anime') && Array.isArray(seasonData?.episodes)
-      ? seasonData.episodes.find((ep: any) => ep.episode_number === episodeNumber)
-      : null;
-
-  const activeEpisodeTitle =
-    currentEpObj?.name && !/^Episode\s+\d+$/i.test(currentEpObj.name.trim())
-      ? currentEpObj.name
-      : null;
-
-  const overviewText =
-    (currentEpObj?.overview && currentEpObj.overview.trim().length > 15
-      ? currentEpObj.overview
-      : item?.overview) || '';
+  // Always show only the series or anime or movie description, never episode titles or descriptions
+  const overviewText = item?.overview || '';
 
   // Metadata fields based on content type
   const releaseYear = item?.first_air_date
@@ -346,7 +293,6 @@ export default function WatchPage({
     null;
 
   const maturityRating = resolveMaturityRating(item, type);
-  const advisories = resolveContentAdvisories(item);
 
   // Primary button label
   let primaryButtonLabel = 'Watch Now';
@@ -449,7 +395,7 @@ export default function WatchPage({
             )}
           </div>
 
-          {/* 2B. Metadata Row */}
+          {/* 2B. Metadata Row (with age rating replacing the HD badge) */}
           <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm font-semibold text-white/90 drop-shadow">
             {releaseYear && (
               <>
@@ -494,101 +440,28 @@ export default function WatchPage({
               </>
             )}
 
+            {/* Age Rating Box Badge replacing the HD badge */}
             <span className="ml-1 px-1.5 py-0.5 text-[10px] md:text-[11px] font-bold tracking-wider uppercase border border-white/40 rounded-[3px] text-white/95 leading-none">
-              HD
-            </span>
-          </div>
-
-          {/* 2C. Content Rating & Advisories Row */}
-          <div className="flex flex-wrap items-center gap-2.5 text-xs md:text-[13px] text-white/75 drop-shadow">
-            <span className="px-2 py-0.5 bg-white/15 border border-white/25 rounded-[3px] text-[11px] font-bold text-white leading-tight">
               {maturityRating}
             </span>
-            {advisories && <span className="text-white/80 font-medium">{advisories}</span>}
           </div>
 
-          {/* 2D. Episode Title (if applicable) & Description / Synopsis */}
-          <div className="flex flex-col gap-1 mt-1 mb-1">
-            {activeEpisodeTitle && (
-              <h2 className="text-sm md:text-base font-bold text-white drop-shadow">
-                {activeEpisodeTitle}
-              </h2>
-            )}
-            {overviewText && (
-              <p className="text-xs md:text-sm lg:text-[15px] text-white/85 leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md font-normal max-w-[480px]">
-                {overviewText}
-              </p>
-            )}
-          </div>
+          {/* 2C. Series/Anime Description only (no episode titles or episode synopses) */}
+          {overviewText && (
+            <p className="text-xs md:text-sm lg:text-[15px] text-white/85 leading-relaxed line-clamp-3 md:line-clamp-4 drop-shadow-md font-normal max-w-[480px] my-1">
+              {overviewText}
+            </p>
+          )}
 
-          {/* 3E. Rating & Library Controls (Subtle Icon Row above Primary Action, matching reference) */}
-          <div className="flex items-center gap-2.5 pt-1 pointer-events-auto">
-            <button
-              onClick={() => handleFeedback('dislike')}
-              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
-                feedback === 'dislike'
-                  ? 'bg-white/20 border-white text-white'
-                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
-              }`}
-              aria-label="Dislike"
-              title="Not for me"
-            >
-              <ThumbsDown
-                className={`w-4 h-4 ${feedback === 'dislike' ? 'fill-current' : ''}`}
-              />
-            </button>
-
-            <button
-              onClick={() => handleFeedback('like')}
-              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
-                feedback === 'like'
-                  ? 'bg-white/20 border-white text-white'
-                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
-              }`}
-              aria-label="Like"
-              title="I like this"
-            >
-              <ThumbsUp
-                className={`w-4 h-4 ${feedback === 'like' ? 'fill-current' : ''}`}
-              />
-            </button>
-
-            <button
-              onClick={handleToggleLibrary}
-              className={`w-9 h-9 md:w-10 md:h-10 rounded-full border transition-all flex items-center justify-center backdrop-blur-md ${
-                inLibrary
-                  ? 'bg-white/20 border-white text-white'
-                  : 'bg-black/40 hover:bg-white/15 border-white/20 text-white/85 hover:text-white'
-              }`}
-              aria-label={inLibrary ? 'Remove from Library' : 'Add to Library'}
-              title={inLibrary ? 'In My List' : 'Add to My List'}
-            >
-              {inLibrary ? <Check className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* 3A–3D. Watching Controls Stack */}
-          <div className="flex flex-col items-start gap-2.5 w-full max-w-[360px] pt-1 pointer-events-auto">
-            {/* Primary Action Button (Prominent White Pill Button) */}
+          {/* 2D. Watching Controls Stack (No like/dislike/library row, No progress bar) */}
+          <div className="flex flex-col items-start gap-2.5 w-full max-w-[360px] pt-2 pointer-events-auto">
+            {/* Primary Action Button (White Pill Button without progress bar) */}
             <button
               onClick={() => onPlay && onPlay()}
-              className="w-full bg-white hover:bg-white/90 text-black px-6 py-3 md:py-3.5 rounded-full font-bold flex items-center justify-between gap-4 transition-all hover:scale-[1.02] active:scale-[0.99] shadow-[0_8px_30px_rgba(0,0,0,0.6)] text-sm md:text-[15px]"
+              className="w-full bg-white hover:bg-white/90 text-black px-4 py-3 md:py-3.5 rounded-full font-bold flex items-center gap-3 transition-all hover:scale-[1.02] active:scale-[0.99] shadow-[0_8px_30px_rgba(0,0,0,0.6)] text-sm md:text-[15px]"
             >
-              <span className="flex items-center gap-3">
-                <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black shrink-0" />
-                <span>{primaryButtonLabel}</span>
-              </span>
-
-              {hasProgress && (
-                <div className="w-14 md:w-16 h-1 bg-black/20 rounded-full overflow-hidden shrink-0">
-                  <div
-                    className="h-full bg-[#E50914] rounded-full"
-                    style={{
-                      width: `${Math.min(95, Math.max(15, Math.round(progressPercent * 100)))}%`,
-                    }}
-                  />
-                </div>
-              )}
+              <Play className="w-4 h-4 md:w-5 md:h-5 fill-current text-black shrink-0" />
+              <span>{primaryButtonLabel}</span>
             </button>
 
             {/* Secondary Action: Play From Beginning */}

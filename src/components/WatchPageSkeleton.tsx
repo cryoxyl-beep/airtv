@@ -19,36 +19,23 @@ export default function WatchPageSkeleton({ type }: { type: 'movie' | 'tv' }) {
           {/* Logo Placeholder */}
           <div className="h-20 md:h-28 w-[220px] md:w-[320px] bg-white/10 rounded-lg animate-pulse mb-2" />
 
-          {/* Metadata Row Placeholder */}
+          {/* Metadata Row Placeholder (with age rating placeholder at end) */}
           <div className="flex items-center gap-2.5">
             <div className="w-12 h-4 bg-white/10 rounded animate-pulse" />
             <div className="w-14 h-4 bg-white/10 rounded animate-pulse" />
             <div className="w-24 h-4 bg-white/10 rounded animate-pulse" />
-            <div className="w-8 h-4 bg-white/10 rounded animate-pulse" />
-          </div>
-
-          {/* Rating & Advisories Placeholder */}
-          <div className="flex items-center gap-2.5">
             <div className="w-14 h-5 bg-white/10 rounded animate-pulse" />
-            <div className="w-36 h-4 bg-white/10 rounded animate-pulse" />
           </div>
 
-          {/* Description Placeholder */}
-          <div className="flex flex-col gap-2 w-full mt-1">
+          {/* Series/Anime Description Placeholder */}
+          <div className="flex flex-col gap-2 w-full my-1">
             <div className="w-full h-3.5 bg-white/10 rounded animate-pulse" />
             <div className="w-[92%] h-3.5 bg-white/10 rounded animate-pulse" />
             <div className="w-[75%] h-3.5 bg-white/10 rounded animate-pulse" />
           </div>
 
-          {/* Icon Controls Placeholder */}
-          <div className="flex items-center gap-2.5 pt-1">
-            <div className="w-10 h-10 bg-white/10 rounded-full animate-pulse" />
-            <div className="w-10 h-10 bg-white/10 rounded-full animate-pulse" />
-            <div className="w-10 h-10 bg-white/10 rounded-full animate-pulse" />
-          </div>
-
           {/* Action Stack Placeholder */}
-          <div className="flex flex-col gap-2.5 w-full max-w-[360px] pt-1">
+          <div className="flex flex-col gap-2.5 w-full max-w-[360px] pt-2">
             <div className="w-full h-12 bg-white/15 rounded-full animate-pulse" />
             <div className="w-48 h-9 bg-white/10 rounded-full animate-pulse" />
             {type === 'tv' && (

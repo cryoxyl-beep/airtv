@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { IMAGE_BASE_URL } from '../api/tmdb';
+import React, { useEffect, useState, useRef } from 'react';
+import { IMAGE_BASE_URL, resolveLogo, getCachedLogo } from '../api/tmdb';
 import { Play, X } from 'lucide-react';
 
 interface MoreEpisodesPopoverProps {
@@ -7,11 +7,14 @@ interface MoreEpisodesPopoverProps {
   onClose: () => void;
   type: 'tv' | 'anime';
   title: string;
+  item?: any;
+  logoUrl?: string | null;
   backdropPath?: string;
   seasons?: any[];
   selectedSeason: number;
   activePlayingSeason: number;
   currentEpisode: number;
+  hasProgress?: boolean;
   episodes: any[];
   loadingEpisodes?: boolean;
   onSeasonChange: (seasonNumber: number) => void;
@@ -23,20 +26,44 @@ export default function MoreEpisodesPopover({
   onClose,
   type,
   title,
+  item,
+  logoUrl: propLogoUrl,
   backdropPath,
   seasons = [],
   selectedSeason,
   activePlayingSeason,
   currentEpisode,
+  hasProgress = false,
   episodes = [],
   loadingEpisodes = false,
   onSeasonChange,
   onEpisodeSelect,
 }: MoreEpisodesPopoverProps) {
+  const [logo, setLogo] = useState<string | null>(() => propLogoUrl || (item ? getCachedLogo(item) : null));
   const episodeListRef = useRef<HTMLDivElement>(null);
   const seasonListRef = useRef<HTMLDivElement>(null);
   const activeEpisodeRef = useRef<HTMLButtonElement | null>(null);
   const activeSeasonRef = useRef<HTMLButtonElement | null>(null);
+
+  // Synchronize or resolve HD clear logo primarily (same as Watch Page)
+  useEffect(() => {
+    if (propLogoUrl) {
+      setLogo(propLogoUrl);
+      return;
+    }
+    if (!item) return;
+    const cached = getCachedLogo(item);
+    if (cached) setLogo(cached);
+    let mounted = true;
+    resolveLogo(item).then((url) => {
+      if (mounted && url) {
+        setLogo(url);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [item, propLogoUrl]);
 
   // Close on Escape key
   useEffect(() => {
@@ -50,7 +77,8 @@ export default function MoreEpisodesPopover({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Position current episode at the TOP of the visible scroll container when opened or when episodes finish loading
+  // Position current episode at the TOP of the visible scroll container when opened
+  // ONLY if hasProgress is true (the user actually has watching progress)
   useEffect(() => {
     if (!isOpen || episodes.length === 0) return;
 
@@ -60,7 +88,7 @@ export default function MoreEpisodesPopover({
 
       if (container) {
         const shouldScrollToCurrent =
-          type === 'anime' || selectedSeason === activePlayingSeason;
+          hasProgress && (type === 'anime' || selectedSeason === activePlayingSeason);
 
         if (shouldScrollToCurrent && targetEl) {
           const containerRect = container.getBoundingClientRect();
@@ -94,7 +122,7 @@ export default function MoreEpisodesPopover({
       cancelAnimationFrame(rafId);
       clearTimeout(timerId);
     };
-  }, [isOpen, loadingEpisodes, episodes, selectedSeason, activePlayingSeason, currentEpisode, type]);
+  }, [isOpen, loadingEpisodes, episodes, selectedSeason, activePlayingSeason, currentEpisode, hasProgress, type]);
 
   if (!isOpen) return null;
 
@@ -107,41 +135,38 @@ export default function MoreEpisodesPopover({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:p-8 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-label="More Episodes"
+      aria-label="Episodes"
     >
       <div
-        className="relative w-full max-w-5xl h-[82vh] max-h-[760px] bg-[#111111]/95 border border-white/10 rounded-2xl shadow-[0_28px_90px_rgba(0,0,0,0.92)] backdrop-blur-2xl flex flex-col overflow-hidden text-white"
+        className="relative w-full max-w-5xl h-[84vh] max-h-[780px] bg-[#0d0d0f]/95 border border-white/10 rounded-2xl md:rounded-3xl shadow-[0_30px_100px_rgba(0,0,0,0.95)] backdrop-blur-2xl flex flex-col overflow-hidden text-white"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-white/10 shrink-0 bg-[#141414]/80">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-lg md:text-xl font-bold tracking-tight text-white truncate">
+        {/* Header: HD Clear Logo primarily (or text fallback), with close button */}
+        <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-white/[0.08] shrink-0 bg-[#121214]/90 backdrop-blur-md">
+          <div className="flex items-center min-w-0 pr-4 h-11 md:h-13">
+            {logo ? (
+              <img
+                src={logo}
+                alt={title}
+                className="max-h-11 md:max-h-13 w-auto max-w-[260px] md:max-w-[340px] object-contain object-left drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)] select-none"
+                draggable={false}
+                onError={() => setLogo(null)}
+              />
+            ) : (
+              <h2 className="text-xl md:text-2xl font-black tracking-tight text-white truncate drop-shadow-md">
                 {title}
-              </h3>
-              <span className="text-white/30">•</span>
-              <span className="text-xs md:text-sm font-medium text-white/60 shrink-0">
-                {type === 'anime'
-                  ? `${episodes.length} Episodes`
-                  : `Season ${selectedSeason} (${episodes.length} Episodes)`}
-              </span>
-            </div>
-            <p className="text-xs text-white/45">
-              {type === 'anime'
-                ? `Currently on Episode ${currentEpisode}`
-                : `Currently on Season ${activePlayingSeason}, Episode ${currentEpisode}`}
-            </p>
+              </h2>
+            )}
           </div>
 
           <button
             onClick={onClose}
-            className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 flex items-center justify-center text-white/80 hover:text-white transition-colors shrink-0"
-            aria-label="Close More Episodes"
+            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 flex items-center justify-center text-white/70 hover:text-white transition-all duration-200 shrink-0 cursor-pointer"
+            aria-label="Close Episodes"
           >
             <X className="w-5 h-5" />
           </button>
@@ -153,9 +178,9 @@ export default function MoreEpisodesPopover({
           {type === 'tv' && validSeasons.length > 0 && (
             <div
               ref={seasonListRef}
-              className="w-full md:w-60 lg:w-64 border-b md:border-b-0 md:border-r border-white/10 bg-[#0d0d0d]/70 overflow-x-auto md:overflow-y-auto shrink-0 p-3 md:p-4 flex md:flex-col gap-1.5"
+              className="w-full md:w-60 lg:w-64 border-b md:border-b-0 md:border-r border-white/[0.08] bg-[#0c0c0e]/80 overflow-x-auto md:overflow-y-auto shrink-0 p-3 md:p-4 flex md:flex-col gap-1.5 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
             >
-              <div className="hidden md:block px-3 pb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+              <div className="hidden md:block px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-white/40">
                 Seasons
               </div>
               {validSeasons.map((s: any) => {
@@ -165,10 +190,10 @@ export default function MoreEpisodesPopover({
                     key={s.id || s.season_number}
                     ref={isSelected ? activeSeasonRef : null}
                     onClick={() => onSeasonChange(s.season_number)}
-                    className={`w-auto md:w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between gap-3 shrink-0 ${
+                    className={`w-auto md:w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-center justify-between gap-3 shrink-0 cursor-pointer ${
                       isSelected
-                        ? 'bg-white text-black font-semibold shadow-md'
-                        : 'text-white/75 hover:bg-white/10 hover:text-white font-medium'
+                        ? 'bg-white text-black font-bold shadow-[0_4px_16px_rgba(255,255,255,0.15)]'
+                        : 'text-white/70 hover:bg-white/[0.07] hover:text-white font-medium'
                     }`}
                   >
                     <span className="text-sm truncate">
@@ -177,7 +202,7 @@ export default function MoreEpisodesPopover({
                     {s.episode_count ? (
                       <span
                         className={`text-xs shrink-0 ${
-                          isSelected ? 'text-black/65 font-semibold' : 'text-white/40'
+                          isSelected ? 'text-black/60 font-semibold' : 'text-white/40'
                         }`}
                       >
                         {s.episode_count} eps
@@ -192,26 +217,28 @@ export default function MoreEpisodesPopover({
           {/* Right Side (or Full Width for Anime): Continuous Vertical Scrollable Episode List */}
           <div
             ref={episodeListRef}
-            className="flex-1 overflow-y-auto p-4 md:p-6 space-y-2.5 relative"
+            className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 relative [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
           >
             {loadingEpisodes && episodes.length === 0 ? (
               <div className="space-y-3">
                 {[...Array(6)].map((_, i) => (
                   <div
                     key={i}
-                    className="h-24 md:h-28 w-full bg-white/5 rounded-xl animate-pulse"
+                    className="h-24 md:h-28 w-full bg-white/[0.04] rounded-xl animate-pulse border border-white/5"
                   />
                 ))}
               </div>
             ) : episodes.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-white/50 text-sm">
+              <div className="h-full flex items-center justify-center text-white/40 text-sm">
                 No episodes available.
               </div>
             ) : (
-              <div className="space-y-2.5 pb-[55vh]">
+              <div className="space-y-3 pb-[50vh]">
                 {episodes.map((ep: any) => {
                   const epNum = ep.episode_number;
+                  // ONLY show CURRENT badge if user has actual progress and this matches current episode
                   const isCurrentEpisode =
+                    Boolean(hasProgress) &&
                     epNum === currentEpisode &&
                     (type === 'anime' || selectedSeason === activePlayingSeason);
 
@@ -233,14 +260,14 @@ export default function MoreEpisodesPopover({
                       ref={isCurrentEpisode ? activeEpisodeRef : null}
                       data-episode-number={epNum}
                       onClick={() => onEpisodeSelect(epNum, type === 'tv' ? selectedSeason : undefined)}
-                      className={`w-full text-left group rounded-xl p-2.5 md:p-3.5 transition-all flex items-center gap-3.5 md:gap-5 border ${
+                      className={`w-full text-left group rounded-xl p-3 md:p-3.5 transition-all duration-200 flex items-center gap-4 md:gap-5 border cursor-pointer ${
                         isCurrentEpisode
-                          ? 'bg-white/[0.14] border-white/40 shadow-lg'
-                          : 'bg-white/[0.03] hover:bg-white/[0.09] border-white/5 hover:border-white/15'
+                          ? 'bg-white/[0.10] border-white/30 shadow-[0_4px_20px_rgba(0,0,0,0.5)]'
+                          : 'bg-white/[0.025] hover:bg-white/[0.07] border-white/[0.06] hover:border-white/15'
                       }`}
                     >
-                      {/* Thumbnail */}
-                      <div className="relative w-32 sm:w-40 md:w-44 aspect-video rounded-lg overflow-hidden bg-[#1b1b1b] shrink-0">
+                      {/* Thumbnail with clean triangle play icon on hover (no circular enclosure) */}
+                      <div className="relative w-36 sm:w-44 md:w-48 aspect-video rounded-lg overflow-hidden bg-[#181818] border border-white/10 shrink-0">
                         {thumbUrl ? (
                           <img
                             src={thumbUrl}
@@ -253,50 +280,42 @@ export default function MoreEpisodesPopover({
                             Ep. {epNum}
                           </div>
                         )}
-                        <div
-                          className={`absolute inset-0 flex items-center justify-center transition-opacity ${
-                            isCurrentEpisode
-                              ? 'bg-black/35 opacity-100'
-                              : 'bg-black/40 opacity-0 group-hover:opacity-100'
-                          }`}
-                        >
-                          <div className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-md">
-                            <Play className="w-4 h-4 fill-current ml-0.5" />
-                          </div>
+
+                        {/* Hover Overlay: Triangle Play icon without circular enclosure */}
+                        <div className="absolute inset-0 flex items-center justify-center transition-all duration-200 bg-black/45 opacity-0 group-hover:opacity-100">
+                          <Play className="w-8 h-8 md:w-9 md:h-9 text-white fill-white drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)] transform group-hover:scale-110 transition-transform duration-200 ml-0.5" />
                         </div>
+
                         {ep.runtime ? (
-                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/80 text-[10px] font-medium text-white/90">
+                          <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-sm text-[10px] font-semibold text-white/90 border border-white/10">
                             {ep.runtime}m
                           </span>
                         ) : null}
                       </div>
 
                       {/* Episode Details */}
-                      <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs md:text-sm font-bold text-white/55">
-                            {type === 'anime' ? `Episode ${epNum}` : `${epNum}.`}
-                          </span>
-                          <span className="text-sm md:text-base font-semibold text-white truncate">
-                            {type === 'anime' && epTitle === `Episode ${epNum}`
-                              ? ''
-                              : epTitle}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+                        <div className="flex items-center gap-2.5 flex-wrap">
+                          <span className="text-sm md:text-base font-semibold text-white group-hover:text-white transition-colors truncate">
+                            {type === 'anime'
+                              ? (epTitle.toLowerCase().startsWith('episode') ? epTitle : `${epNum}. ${epTitle}`)
+                              : `${epNum}. ${ep.name || `Episode ${epNum}`}`}
                           </span>
                           {isCurrentEpisode && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-white text-black rounded-sm">
-                              Current
+                            <span className="px-2 py-0.5 text-[10px] font-extrabold tracking-wider uppercase bg-white text-black rounded-[4px] shadow-sm">
+                              CURRENT
                             </span>
                           )}
                         </div>
 
                         {ep.overview ? (
-                          <p className="text-xs md:text-sm text-white/60 line-clamp-2 leading-relaxed">
+                          <p className="text-xs md:text-[13px] text-white/55 group-hover:text-white/75 line-clamp-2 leading-relaxed transition-colors">
                             {ep.overview}
                           </p>
                         ) : (
                           <p className="text-xs text-white/40">
                             {type === 'anime'
-                              ? `Watch Episode ${epNum}`
+                              ? `Episode ${epNum}`
                               : `Season ${selectedSeason} • Episode ${epNum}`}
                           </p>
                         )}

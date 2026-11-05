@@ -79,19 +79,23 @@ export default function PlatformRow() {
   };
 
   return (
-    <div className="relative group/row">
-      <div className="flex items-center justify-center mb-2">
-        <h2 className="text-2xl font-bold text-white tracking-wide">Browse by Platform</h2>
+    <div
+      className="relative group/row my-3"
+      style={{
+        contentVisibility: 'auto',
+        containIntrinsicSize: '1px 180px',
+      }}
+    >
+      <div className="flex items-center justify-between px-4 sm:px-8 lg:px-[56px] mb-2 sm:mb-3">
+        <h2 className="text-lg sm:text-xl md:text-2xl font-extrabold text-white/95 tracking-tight">
+          Browse by Platform
+        </h2>
       </div>
       <div
         ref={rowRef}
-        className={`flex items-center lg:justify-center overflow-x-auto scrollbar-hide gap-6 py-4 ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
-        onMouseDown={handleMouseDown}
-        onMouseLeave={handleMouseLeave}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
+        className="flex items-center overflow-x-auto scrollbar-hide gap-4 sm:gap-6 py-3 scroll-smooth"
       >
-        <div className="w-6 shrink-0" />
+        <div className="w-4 sm:w-8 lg:w-[56px] shrink-0" />
         
         {platforms.map((platform) => (
           <div
@@ -112,7 +116,7 @@ export default function PlatformRow() {
           </div>
         ))}
 
-        <div className="w-6 shrink-0" />
+        <div className="w-4 sm:w-8 lg:w-[56px] shrink-0" />
       </div>
     </div>
   );

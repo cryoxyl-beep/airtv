@@ -115,6 +115,47 @@ export const extractBestLogoPath = (logos: any[]): string | null => {
   return sorted[0]?.file_path || null;
 };
 
+// Queue & Concurrency Limiter for logo resolution to prevent network thread saturation and TMDB 429 rate limits
+class ConcurrencyQueue {
+  private queue: (() => Promise<void>)[] = [];
+  private activeCount = 0;
+  private maxConcurrency: number;
+
+  constructor(maxConcurrency = 3) {
+    this.maxConcurrency = maxConcurrency;
+  }
+
+  enqueue<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await task();
+          resolve(result);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      this.processNext();
+    });
+  }
+
+  private processNext() {
+    if (this.activeCount >= this.maxConcurrency || this.queue.length === 0) {
+      return;
+    }
+    const nextTask = this.queue.shift();
+    if (!nextTask) return;
+
+    this.activeCount++;
+    nextTask().finally(() => {
+      this.activeCount--;
+      this.processNext();
+    });
+  }
+}
+
+export const logoQueue = new ConcurrencyQueue(2);
+
 export const primeLogoCache = (type: string, id: number | string, logoFilePathOrUrl: string | null) => {
   if (!id || !type) return;
   const cacheKey = `hd_logo_${type}_${id}`;
@@ -271,7 +312,7 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
     return inFlightLogos.get(cacheKey)!;
   }
 
-  const fetchPromise = (async () => {
+  const fetchTask = async () => {
     let finalUrl: string | null = null;
     let source = 'none';
 
@@ -367,11 +408,12 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
     }
 
     return finalUrl;
-  })();
+  };
 
-  inFlightLogos.set(cacheKey, fetchPromise);
+  const queuedPromise = logoQueue.enqueue(fetchTask);
+  inFlightLogos.set(cacheKey, queuedPromise);
   try {
-    return await fetchPromise;
+    return await queuedPromise;
   } finally {
     inFlightLogos.delete(cacheKey);
   }
@@ -379,17 +421,16 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
 
 export const preloadLogosForItems = async (items: any[]): Promise<void> => {
   if (!Array.isArray(items)) return;
-  await Promise.all(
-    items.map(async (item) => {
-      if (!item) return;
-      try {
-        const logoUrl = await resolveLogo(item);
-        if (logoUrl) preloadImageUrl(logoUrl);
-      } catch (e) {
-        // ignore
-      }
-    })
-  );
+  // Filter out items that already have a cached logo to avoid redundant operations
+  const uncached = items.filter(item => item && !getCachedLogo(item)).slice(0, 12);
+  for (const item of uncached) {
+    try {
+      const logoUrl = await resolveLogo(item);
+      if (logoUrl) preloadImageUrl(logoUrl);
+    } catch (e) {
+      // ignore
+    }
+  }
 };
 
 export const isAnime = (item: any): boolean => {

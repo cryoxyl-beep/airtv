@@ -218,29 +218,11 @@ export const preloadHomeData = async (): Promise<any> => {
 
       // 1. Resolve clear logos for top visible items first
       const priorityItems = [
-        ...newData.heroItems,
-        ...newData.trending.slice(4, 10)
+        ...newData.heroItems.slice(0, 4)
       ];
       await Promise.race([
         preloadLogosForItems(priorityItems),
-        new Promise(r => setTimeout(r, 600))
-      ]);
-
-      // Pre-warm remaining row logos smoothly in background without blocking
-      preloadLogosForItems([
-        ...newData.trending.slice(10),
-        ...newData.topRated.slice(0, 10),
-        ...newData.action.slice(0, 8),
-        ...newData.martialArts.slice(0, 8),
-        ...newData.supernatural.slice(0, 8),
-        ...newData.cyberpunk.slice(0, 8),
-        ...newData.survival.slice(0, 8),
-        ...newData.isekai.slice(0, 8),
-        ...newData.comedy.slice(0, 8),
-        ...newData.romance.slice(0, 8),
-        ...newData.scifi.slice(0, 8),
-        ...newData.horror.slice(0, 8),
-        ...newData.thriller.slice(0, 8)
+        new Promise(r => setTimeout(r, 400))
       ]);
 
       // 2. Preload critical image bytes into browser GPU cache
@@ -266,11 +248,12 @@ export const preloadHomeData = async (): Promise<any> => {
       }
 
       for (const card of (newData.top10.slice(0, 6) as any[])) {
-        if (card?.poster_path) {
+        if (card?.backdrop_path) {
           criticalImageUrls.push(
-            card.poster_path.startsWith('http') ? card.poster_path : `${IMAGE_BASE_URL_W500}${card.poster_path}`
+            card.backdrop_path.startsWith('http') ? card.backdrop_path : `${IMAGE_BASE_URL_W500}${card.backdrop_path}`
           );
         }
+        criticalImageUrls.push(getCachedLogo(card));
       }
 
       for (const card of (newData.trending.slice(4, 9) as any[])) {
@@ -374,7 +357,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
   }, [data.heroItems, typeFilter]);
 
   return (
-    <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-[100vw]">
+    <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-full max-w-[100vw]">
       {isLoading && (
         <div 
           className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-250 ease-out ${isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}

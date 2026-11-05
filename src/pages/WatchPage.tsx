@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { fetchAnimeDetails } from '../api/anilist';
-import { fetchDetails, fetchTVSeason, getSeedItem } from '../api/tmdb';
+import { fetchDetails, fetchTVSeason, getSeedItem, resolveLogo, getCachedLogo } from '../api/tmdb';
 import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import WatchPageContent from '../components/WatchPage';
@@ -23,6 +23,22 @@ export default function WatchPage({ type }: WatchPageProps) {
     (location.state as any)?.item || (id ? getSeedItem(type, parseInt(id, 10)) : null);
 
   const [data, setData] = useState<any>(initialSeed);
+  const [resolvedLogoUrl, setResolvedLogoUrl] = useState<string | null>(() =>
+    initialSeed ? getCachedLogo(initialSeed) : null
+  );
+
+  useEffect(() => {
+    if (!data) return;
+    const cached = getCachedLogo(data);
+    if (cached) setResolvedLogoUrl(cached);
+    let mounted = true;
+    resolveLogo(data).then((url) => {
+      if (mounted && url) setResolvedLogoUrl(url);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [data]);
 
   // Resolve initial watch progress from localStorage or URL params
   const savedProgress = id ? getWatchProgress(type, id) : null;
@@ -47,7 +63,11 @@ export default function WatchPage({ type }: WatchPageProps) {
       ? urlEpisode || 1
       : savedProgress?.episode || urlEpisode || 1;
 
-  const hasProgress = Boolean(savedProgress || hasExplicitUrlProgress);
+  // Only consider as progress if user has explicit saved progress percentage > 0 or explicit URL progress
+  const hasProgress = Boolean(
+    (savedProgress && typeof savedProgress.progress === 'number' && savedProgress.progress > 0) ||
+    hasExplicitUrlProgress
+  );
   const progressPercent = savedProgress?.progress ?? (hasExplicitUrlProgress ? 0.35 : 0);
 
   const [selectedPopoverSeason, setSelectedPopoverSeason] = useState<number>(resolvedSeason);
@@ -374,11 +394,14 @@ export default function WatchPage({ type }: WatchPageProps) {
           onClose={() => setShowMoreEpisodes(false)}
           type={type}
           title={data.title || data.name || 'Episodes'}
+          item={data}
+          logoUrl={resolvedLogoUrl}
           backdropPath={data.backdrop_path}
           seasons={type === 'tv' ? data.seasons || [] : undefined}
           selectedSeason={selectedPopoverSeason}
           activePlayingSeason={resolvedSeason}
           currentEpisode={resolvedEpisode}
+          hasProgress={hasProgress}
           episodes={activePopoverEpisodes}
           loadingEpisodes={loadingEpisodes}
           onSeasonChange={(newSeason) => setSelectedPopoverSeason(newSeason)}

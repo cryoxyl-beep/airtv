@@ -180,7 +180,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
                 <img
                   src={logo}
                   alt={item.title || item.name}
-                  className="max-h-12 max-w-[80%] object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)]"
+                  className="max-h-16 md:max-h-[72px] max-w-[84%] object-contain drop-shadow-[0_4px_8px_rgba(0,0,0,0.85)]"
                   draggable={false}
                   decoding="async"
                   onError={() => {
