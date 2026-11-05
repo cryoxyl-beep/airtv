@@ -21,7 +21,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
-  const [provider, setProvider] = useState<Provider>(type === 'anime' ? 'miyoro' : 'vidrift');
+  const [provider, setProvider] = useState<Provider>(type === 'anime' ? 'miyoro' : 'vidly');
   const [vidriftError, setVidriftError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -106,13 +106,97 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     loadData();
   }, [id, type, activeSeason]);
 
-  // Centralized, strictly secured message listener for VidRift playback events
+  // Centralized, strictly secured message listener for Vidly & VidRift playback events
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Security: Validate exact official VidRift origin
-      if (event.origin !== 'https://embed.vidrift.net') return;
       const payload = event.data;
       if (!payload || typeof payload !== 'object') return;
+
+      // Security: Validate official Vidly origin
+      if (event.origin === 'https://vidly.pro') {
+        if (payload.type === 'VIDLY_PLAYER_EVENT' && payload.data) {
+          const { event: vEvent, currentTime, duration: vDur, season: vSeason, episode: vEpisode } = payload.data;
+          const curTime = Number(currentTime);
+          const dur = Number(vDur);
+          if (!isNaN(curTime) && !isNaN(dur) && dur > 0) {
+            const progress = Math.min(1, Math.max(0, curTime / dur));
+            const isEnded = vEvent === 'ended' || progress >= 0.98;
+            if (type === 'anime') {
+              const ep = Number(vEpisode || activeEpisode);
+              if (id) {
+                saveWatchProgress('anime', id, {
+                  episode: ep,
+                  progress: isEnded ? 1.0 : progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            } else if (type === 'tv') {
+              const s = Number(vSeason || activeSeason || 1);
+              const ep = Number(vEpisode || activeEpisode);
+              if (id) {
+                saveWatchProgress('tv', id, {
+                  season: s,
+                  episode: ep,
+                  progress: isEnded ? 1.0 : progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            } else if (type === 'movie') {
+              if (id) {
+                saveWatchProgress('movie', id, {
+                  progress: isEnded ? 1.0 : progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            }
+          }
+        } else if (payload.type === 'SYNC_HISTORY' && payload.data) {
+          const { duration: sDur, watched: sWatched, season: sSeason, episode: sEp } = payload.data;
+          const curTime = Number(sWatched);
+          const dur = Number(sDur);
+          if (!isNaN(curTime) && !isNaN(dur) && dur > 0) {
+            const progress = Math.min(1, Math.max(0, curTime / dur));
+            if (type === 'anime') {
+              const ep = Number(sEp || activeEpisode);
+              if (id) {
+                saveWatchProgress('anime', id, {
+                  episode: ep,
+                  progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            } else if (type === 'tv') {
+              const s = Number(sSeason || activeSeason || 1);
+              const ep = Number(sEp || activeEpisode);
+              if (id) {
+                saveWatchProgress('tv', id, {
+                  season: s,
+                  episode: ep,
+                  progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            } else if (type === 'movie') {
+              if (id) {
+                saveWatchProgress('movie', id, {
+                  progress,
+                  currentTime: curTime,
+                  duration: dur,
+                });
+              }
+            }
+          }
+        }
+        return;
+      }
+
+      // Security: Validate exact official VidRift origin
+      if (event.origin !== 'https://embed.vidrift.net') return;
 
       switch (payload.type) {
         case 'vidrift:progress': {
@@ -354,6 +438,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
               {type === 'anime' ? (
                 <>
                   <option value="miyoro">Server: Miyoro</option>
+                  <option value="vidly">Server: Vidly</option>
                   <option value="vidrift">Server: VidRift</option>
                   <option value="vidnest">Server: Vidnest</option>
                   <option value="origami">Server: Origami</option>
@@ -361,6 +446,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                 </>
               ) : (
                 <>
+                  <option value="vidly">Server: Vidly</option>
                   <option value="vidrift">Server: VidRift</option>
                   <option value="vidnest">Server: Vidnest</option>
                   <option value="cinesrc">Server: CineSrc</option>
@@ -434,10 +520,10 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                   <span>Retry</span>
                 </button>
                 <button
-                  onClick={() => setProvider('vidrift')}
+                  onClick={() => setProvider('vidly')}
                   className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium text-xs md:text-sm border border-white/20 transition-all cursor-pointer"
                 >
-                  Switch to VidRift
+                  Switch to Vidly
                 </button>
               </div>
             </div>
@@ -494,7 +580,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
             key={`iframe-${providerUrl}`}
             src={providerUrl}
             className="w-full h-full border-0"
-            allow="autoplay; fullscreen"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
             onLoad={handleIframeLoad}

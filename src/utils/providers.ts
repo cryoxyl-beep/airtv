@@ -1,4 +1,4 @@
-export type Provider = 'miyoro' | 'vidrift' | 'vidnest' | 'cinesrc' | 'vidfast' | 'movies111' | 'origami' | 'animepahe';
+export type Provider = 'vidly' | 'miyoro' | 'vidrift' | 'vidnest' | 'cinesrc' | 'vidfast' | 'movies111' | 'origami' | 'animepahe';
 
 export interface ProviderOptions {
   title?: string;
@@ -32,6 +32,8 @@ export function buildVidriftParams(options?: ProviderOptions): string {
 
 export function buildMovieProviderUrl(provider: Provider, tmdbId: string | number, options?: ProviderOptions): string {
   switch (provider) {
+    case 'vidly':
+      return `https://vidly.pro/movie/${tmdbId}?autoplay=1&audioPicker=1`;
     case 'vidrift':
       return `https://embed.vidrift.net/embed/movie/${tmdbId}${buildVidriftParams(options)}`;
     case 'vidnest':
@@ -43,12 +45,14 @@ export function buildMovieProviderUrl(provider: Provider, tmdbId: string | numbe
     case 'movies111':
       return `https://111movies.net/movie/${tmdbId}`;
     default:
-      return `https://vidnest.fun/movie/${tmdbId}`;
+      return `https://vidly.pro/movie/${tmdbId}?autoplay=1&audioPicker=1`;
   }
 }
 
 export function buildSeriesProviderUrl(provider: Provider, tmdbId: string | number, season: string | number, episode: string | number, options?: ProviderOptions): string {
   switch (provider) {
+    case 'vidly':
+      return `https://vidly.pro/tv/${tmdbId}/${season}/${episode}?autoplay=1&audioPicker=1`;
     case 'vidrift':
       return `https://embed.vidrift.net/embed/tv/${tmdbId}/${season}/${episode}${buildVidriftParams(options)}`;
     case 'vidnest':
@@ -60,12 +64,18 @@ export function buildSeriesProviderUrl(provider: Provider, tmdbId: string | numb
     case 'movies111':
       return `https://111movies.net/tv/${tmdbId}/${season}/${episode}`;
     default:
-      return `https://vidnest.fun/tv/${tmdbId}/${season}/${episode}`;
+      return `https://vidly.pro/tv/${tmdbId}/${season}/${episode}?autoplay=1&audioPicker=1`;
   }
 }
 
 export function buildAnimeProviderUrl(provider: Provider, anilistId: string | number, malId: string | number | undefined, episodeNumber: string | number, audioLanguage: 'sub' | 'dub' = 'sub', startAtSeconds: number = 0, options?: ProviderOptions): string {
   switch (provider) {
+    case 'vidly': {
+      if (options?.isMovie && options?.tmdbId) {
+        return `https://vidly.pro/movie/${options.tmdbId}?autoplay=1&audioPicker=1`;
+      }
+      return `https://vidly.pro/anime/${anilistId}/${episodeNumber}/${audioLanguage}?autoplay=1&audioPicker=1`;
+    }
     case 'vidrift': {
       if (options?.isMovie && options?.tmdbId) {
         return `https://embed.vidrift.net/embed/movie/${options.tmdbId}${buildVidriftParams(options)}`;
@@ -82,3 +92,4 @@ export function buildAnimeProviderUrl(provider: Provider, anilistId: string | nu
       return `https://vidnest.fun/anime/${anilistId}/${episodeNumber}/${audioLanguage}?startAt=${startAtSeconds}`;
   }
 }
+
