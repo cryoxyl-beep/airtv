@@ -311,68 +311,6 @@ export default function MiyoroVidstackPlayer({
   const handleProviderChange = (provider: any) => {
     if (!provider) return;
 
-    if (isDASHProvider(provider)) {
-      // Shaka config with retry parameters (movy's CDN throttles, so be generous)
-      (provider as any).config = {
-        streaming: {
-          retryParameters: {
-            maxAttempts: 5,
-            baseDelay: 1000,
-            backoffFactor: 1.5,
-            fuzzFactor: 0.5,
-            timeout: 30000,
-          },
-        },
-        manifest: {
-          retryParameters: {
-            maxAttempts: 3,
-            baseDelay: 1000,
-            backoffFactor: 1.5,
-            fuzzFactor: 0.5,
-            timeout: 60000,
-          },
-        },
-      };
-
-      // Register request filter on Shaka's networking engine — this is the magic.
-      // Every URL Shaka tries to fetch (manifest, init segment, media segment,
-      // audio track) goes through this filter. If it's a movy CDN URL, wrap it
-      // through /api/stream.
-      const registerShakaOrDashFilters = () => {
-        const shakaInstance = provider.instance as any;
-        const engine = shakaInstance?.getNetworkingEngine?.();
-        if (engine && !engine._movyFilterRegistered) {
-          engine._movyFilterRegistered = true;
-          engine.registerRequestFilter((type: any, request: any) => {
-            if (request?.uris && request.uris.length > 0) {
-              const uri = request.uris[0];
-              if (!uri || uri.includes('/api/stream?url=')) return;
-              if (isMovyCdnUrl(uri)) {
-                request.uris = [proxyWrap(uri)];
-              }
-            }
-          });
-        }
-
-        // Also support dash.js request modification if dash.js is used under the hood
-        if (shakaInstance?.extend && !shakaInstance._movyModifierRegistered) {
-          shakaInstance._movyModifierRegistered = true;
-          shakaInstance.extend('RequestModifier', () => ({
-            modifyRequestURL: (url: string) => {
-              if (url && !url.includes('/api/stream?url=') && isMovyCdnUrl(url)) {
-                return proxyWrap(url);
-              }
-              return url;
-            },
-          }), true);
-        }
-      };
-
-      registerShakaOrDashFilters();
-      const timer = setInterval(registerShakaOrDashFilters, 50);
-      setTimeout(() => clearInterval(timer), 3000);
-    }
-
     if (isHLSProvider(provider)) {
       (provider as any).config = {
         // Movy's variant playlists can be huge (700KB-1.5MB). Allow generous timeouts.
@@ -390,6 +328,14 @@ export default function MiyoroVidstackPlayer({
         audioTrackLoadingRetryDelay: 1000,
         // Use our custom loader that wraps movy URLs through /api/stream
         loader: ProxyHlsLoader as any,
+      };
+    }
+
+    if (isDASHProvider(provider)) {
+      // dash.js config — DIFFERENT from Shaka. No retryParameters,
+      // no manifest.retryParameters. The path-based proxy handles everything.
+      provider.config = {
+        streaming: {},
       };
     }
   };
