@@ -281,7 +281,7 @@ export const preloadHomeData = async (): Promise<any> => {
 };
 
 interface HomeProps {
-  typeFilter?: 'shows' | 'movies';
+  typeFilter?: 'shows' | 'movies' | 'anime';
 }
 
 export default function Home({ typeFilter }: HomeProps = {}) {
@@ -352,6 +352,10 @@ export default function Home({ typeFilter }: HomeProps = {}) {
     if (typeFilter === 'movies') {
       const movies = data.heroItems.filter((i: any) => i.media_type === 'movie' || i.release_date);
       return movies.length > 0 ? movies : data.heroItems;
+    }
+    if (typeFilter === 'anime') {
+      const animes = data.heroItems.filter((i: any) => i.source === 'anilist' || i.anime_format || (i.origin_country && i.origin_country.includes('JP')));
+      return animes.length > 0 ? animes : data.heroItems;
     }
     return data.heroItems;
   }, [data.heroItems, typeFilter]);

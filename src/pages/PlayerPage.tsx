@@ -6,7 +6,9 @@ import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import EpisodeOverlay from '../components/EpisodeOverlay';
 import AnimeVidstackPlayer from '../components/AnimeVidstackPlayer';
+import MiyoroVidstackPlayer from '../components/MiyoroVidstackPlayer';
 import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
+import { fetchMovyPlay, fetchMovySeason, MovySource } from '../api/movy';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
 import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
 import { ListVideo, RefreshCw } from 'lucide-react';
@@ -21,7 +23,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   const [seasonData, setSeasonData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showEpisodeOverlay, setShowEpisodeOverlay] = useState(false);
-  const [provider, setProvider] = useState<Provider>(type === 'anime' ? 'miyoro' : 'vidly');
+  const [provider, setProvider] = useState<Provider>('miyoro');
   const [vidriftError, setVidriftError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -29,6 +31,11 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   const [animeStream, setAnimeStream] = useState<AnimeStreamResult | null>(null);
   const [animeStreamLoading, setAnimeStreamLoading] = useState<boolean>(false);
   const [animeStreamError, setAnimeStreamError] = useState<string | null>(null);
+
+  // Dedicated Native Movie & TV Movy Stream State (Server: Miyoro)
+  const [movySources, setMovySources] = useState<MovySource[]>([]);
+  const [movyLoading, setMovyLoading] = useState<boolean>(false);
+  const [movyError, setMovyError] = useState<string | null>(null);
 
   const activeSeason = type === 'tv' ? (season ? parseInt(season, 10) : 1) : undefined;
   const activeEpisode = episode ? parseInt(episode, 10) : 1;
@@ -74,6 +81,40 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     };
   }, [type, id, activeEpisode, provider]);
 
+  // Fetch native movie & TV stream with Movy API when Server: Miyoro is selected
+  useEffect(() => {
+    if (type === 'anime' || !id || provider !== 'miyoro') return;
+
+    let isMounted = true;
+    const controller = new AbortController();
+
+    setMovyLoading(true);
+    setMovyError(null);
+    setMovySources([]);
+
+    fetchMovyPlay(type as 'movie' | 'tv', id, activeSeason, activeEpisode, controller.signal)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.sources && res.sources.length > 0) {
+          setMovySources(res.sources);
+        } else {
+          setMovyError('Stream unavailable. You can retry or switch to another server.');
+        }
+        setMovyLoading(false);
+      })
+      .catch((err) => {
+        if (!isMounted || controller.signal.aborted) return;
+        console.error('Failed to load Movy stream:', err);
+        setMovyError('Stream unavailable. You can retry or switch to another server.');
+        setMovyLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [type, id, activeSeason, activeEpisode, provider]);
+
   // Load media details and season/episode info
   useEffect(() => {
     const loadData = async () => {
@@ -92,8 +133,18 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         } else {
           details = await fetchDetails(parseInt(id), type as 'movie' | 'tv');
           if (type === 'tv') {
-            const seasonDetails = await fetchTVSeason(parseInt(id), activeSeason);
-            setSeasonData(seasonDetails);
+            try {
+              const seasonDetails = await fetchTVSeason(parseInt(id), activeSeason);
+              setSeasonData(seasonDetails);
+            } catch (e) {
+              console.warn('TMDB season fetch failed, attempting Movy season:', e);
+              try {
+                const movySeason = await fetchMovySeason(id, activeSeason || 1);
+                setSeasonData({ episodes: movySeason.episodes });
+              } catch (movyErr) {
+                console.error('Movy season fetch also failed:', movyErr);
+              }
+            }
           }
         }
         setData(details);
@@ -419,60 +470,89 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   const showEpisodesButton = type === 'tv' || type === 'anime';
 
+  // Episode calculations for TV series
+  const currIdx = seasonData?.episodes?.findIndex((e: any) => e.episode_number === activeEpisode);
+  const hasNextEpisode = currIdx !== undefined && currIdx !== -1 && currIdx + 1 < (seasonData?.episodes?.length || 0);
+  const nextEpisodeNumber = hasNextEpisode ? seasonData?.episodes[currIdx + 1]?.episode_number : undefined;
+  const currentEpObj = seasonData?.episodes?.find((e: any) => e.episode_number === activeEpisode);
+
+  // Saved resume time from preferences
+  const savedProgressTime = (() => {
+    if (!id || !type) return 0;
+    const saved = getWatchProgress(type, id);
+    if (type === 'tv') {
+      if (saved?.season === activeSeason && saved?.episode === activeEpisode && saved?.currentTime && saved.currentTime > 5) {
+        return saved.currentTime;
+      }
+      return 0;
+    }
+    if (type === 'movie') {
+      return saved?.currentTime && saved.currentTime > 5 ? saved.currentTime : 0;
+    }
+    return 0;
+  })();
+
+  const isNativeMovyPlaying = type !== 'anime' && provider === 'miyoro' && movySources.length > 0 && !movyLoading && !movyError;
+
+  const serverSelectorNode = (
+    <div className="relative flex items-center">
+      <select
+        value={provider}
+        onChange={(e) => {
+          setProvider(e.target.value as Provider);
+          setVidriftError(null);
+          setAnimeStreamError(null);
+          setMovyError(null);
+        }}
+        className="bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md text-white rounded-full pl-5 pr-10 py-2.5 outline-none font-medium appearance-none transition-all focus:ring-1 focus:ring-white/20 cursor-pointer text-xs md:text-sm"
+      >
+        {type === 'anime' ? (
+          <>
+            <option value="miyoro">Server: Miyoro</option>
+            <option value="vidly">Server: Vidly</option>
+            <option value="vidrift">Server: VidRift</option>
+            <option value="vidnest">Server: Vidnest</option>
+            <option value="origami">Server: Origami</option>
+            <option value="animepahe">Server: AnimePahe</option>
+          </>
+        ) : (
+          <>
+            <option value="miyoro">Server: Miyoro (Native)</option>
+            <option value="vidly">Server: Vidly</option>
+            <option value="vidrift">Server: VidRift</option>
+            <option value="vidnest">Server: Vidnest</option>
+            <option value="cinesrc">Server: CineSrc</option>
+            <option value="vidfast">Server: VidFast</option>
+            <option value="movies111">Server: 111Movies</option>
+          </>
+        )}
+      </select>
+      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </div>
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Top Bar Navigation: Server Selection and Episode Selector centered at top */}
-      <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-50 flex items-center justify-center pointer-events-none">
-        <div className="flex items-center gap-2.5 md:gap-3 pointer-events-auto">
-          {/* Server/Provider Selector */}
-          <div className="relative flex items-center">
-            <select
-              value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value as Provider);
-                setVidriftError(null);
-                setAnimeStreamError(null);
-              }}
-              className="bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md text-white rounded-full pl-5 pr-10 py-2.5 outline-none font-medium appearance-none transition-all focus:ring-1 focus:ring-white/20 cursor-pointer text-xs md:text-sm"
-            >
-              {type === 'anime' ? (
-                <>
-                  <option value="miyoro">Server: Miyoro</option>
-                  <option value="vidly">Server: Vidly</option>
-                  <option value="vidrift">Server: VidRift</option>
-                  <option value="vidnest">Server: Vidnest</option>
-                  <option value="origami">Server: Origami</option>
-                  <option value="animepahe">Server: AnimePahe</option>
-                </>
-              ) : (
-                <>
-                  <option value="vidly">Server: Vidly</option>
-                  <option value="vidrift">Server: VidRift</option>
-                  <option value="vidnest">Server: Vidnest</option>
-                  <option value="cinesrc">Server: CineSrc</option>
-                  <option value="vidfast">Server: VidFast</option>
-                  <option value="movies111">Server: 111Movies</option>
-                </>
-              )}
-            </select>
-            {/* Custom dropdown arrow */}
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/50">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
-          </div>
+      {/* Top Bar Navigation: Only displayed when not inside native Movy player (which renders its own top bar) */}
+      {!isNativeMovyPlaying && (
+        <div className="absolute top-0 left-0 right-0 p-4 md:p-6 z-50 flex items-center justify-center pointer-events-none">
+          <div className="flex items-center gap-2.5 md:gap-3 pointer-events-auto">
+            {serverSelectorNode}
 
-          {/* Episode Selector Button */}
-          {showEpisodesButton && (
-            <button
-              onClick={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
-              className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer"
-              aria-label="Episodes"
-            >
-              <ListVideo className="w-5 h-5 text-white" />
-            </button>
-          )}
+            {showEpisodesButton && (
+              <button
+                onClick={() => setShowEpisodeOverlay(!showEpisodeOverlay)}
+                className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-[#141414]/90 hover:bg-[#1c1c1c]/95 border border-white/10 shadow-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer text-white"
+                aria-label="Episodes"
+              >
+                <ListVideo className="w-5 h-5 text-white" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Optional Discreet Error Notification for VidRift */}
       {vidriftError && type !== 'anime' && (
@@ -488,13 +568,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         </div>
       )}
 
-      {/* Main Player */}
+      {/* Main Player Area */}
       <div className="flex-1 w-full h-full relative">
+        {/* 1. NATIVE ANIME STREAM (Anivault API) */}
         {type === 'anime' && provider === 'miyoro' ? (
           animeStreamLoading ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-white">
               <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-              <p className="text-sm text-white/60 font-medium">Loading Miyoro stream...</p>
+              <p className="text-sm text-white/60 font-medium">Loading Miyoro anime stream...</p>
             </div>
           ) : animeStreamError ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
@@ -574,7 +655,101 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
               <p>Unable to load anime video stream.</p>
             </div>
           )
-        ) : providerUrl ? (
+        ) : /* 2. NATIVE MOVIE & TV STREAM (Movy API + Vidstack Native Player) */
+        type !== 'anime' && provider === 'miyoro' ? (
+          movyLoading ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-white">
+              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+              <p className="text-sm text-white/60 font-medium">Loading Miyoro native stream...</p>
+            </div>
+          ) : movyError ? (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
+              <p className="text-sm md:text-base text-red-400 max-w-md">{movyError}</p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setMovyError(null);
+                    setMovyLoading(true);
+                    fetchMovyPlay(type as 'movie' | 'tv', id!, activeSeason, activeEpisode)
+                      .then((res) => {
+                        if (res.sources && res.sources.length > 0) {
+                          setMovySources(res.sources);
+                        } else {
+                          setMovyError('Stream unavailable. You can retry or switch to another server.');
+                        }
+                        setMovyLoading(false);
+                      })
+                      .catch(() => {
+                        setMovyLoading(false);
+                        setMovyError('Stream unavailable. You can retry or switch to another server.');
+                      });
+                  }}
+                  className="px-5 py-2.5 rounded-full bg-white text-black font-semibold text-xs md:text-sm hover:bg-white/90 transition-all cursor-pointer flex items-center gap-2"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Retry</span>
+                </button>
+                <button
+                  onClick={() => setProvider('vidly')}
+                  className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium text-xs md:text-sm border border-white/20 transition-all cursor-pointer"
+                >
+                  Switch to Vidly
+                </button>
+              </div>
+            </div>
+          ) : movySources.length > 0 ? (
+            <MiyoroVidstackPlayer
+              sources={movySources}
+              title={mediaTitle}
+              poster={posterUrl}
+              type={type as 'movie' | 'tv'}
+              season={activeSeason}
+              episode={activeEpisode}
+              episodeTitle={currentEpObj?.name}
+              initialTime={savedProgressTime}
+              onProgress={(cur, dur, prog) => {
+                if (id) {
+                  saveWatchProgress(type as 'movie' | 'tv', id, {
+                    season: activeSeason,
+                    episode: type === 'movie' ? undefined : activeEpisode,
+                    progress: prog,
+                    currentTime: cur,
+                    duration: dur,
+                  });
+                }
+              }}
+              onEnded={() => {
+                if (id) {
+                  saveWatchProgress(type as 'movie' | 'tv', id, {
+                    season: activeSeason,
+                    episode: type === 'movie' ? undefined : activeEpisode,
+                    progress: 1.0,
+                  });
+                }
+                if (type === 'tv' && hasNextEpisode && nextEpisodeNumber) {
+                  navigate(`/play/tv/${id}/${activeSeason}/${nextEpisodeNumber}`, { replace: true });
+                }
+              }}
+              onError={(err) => {
+                console.warn('Movy Vidstack playback error:', err);
+              }}
+              onNextEpisode={
+                hasNextEpisode && nextEpisodeNumber
+                  ? () => navigate(`/play/tv/${id}/${activeSeason}/${nextEpisodeNumber}`, { replace: true })
+                  : undefined
+              }
+              hasNextEpisode={hasNextEpisode}
+              onOpenEpisodes={() => setShowEpisodeOverlay(true)}
+              onBack={() => navigate(-1)}
+              serverSelector={serverSelectorNode}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white">
+              <p>Stream unavailable.</p>
+            </div>
+          )
+        ) : /* 3. 3RD-PARTY PROVIDER IFRAMES (Vidly, VidRift, Vidnest, etc.) */
+        providerUrl ? (
           <iframe
             ref={iframeRef}
             key={`iframe-${providerUrl}`}
