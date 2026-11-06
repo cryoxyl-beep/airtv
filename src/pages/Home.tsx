@@ -281,7 +281,7 @@ export const preloadHomeData = async (): Promise<any> => {
 };
 
 interface HomeProps {
-  typeFilter?: 'shows' | 'movies' | 'anime';
+  typeFilter?: 'shows' | 'movies' | 'anime' | 'sports' | 'sparks' | 'categories';
 }
 
 export default function Home({ typeFilter }: HomeProps = {}) {
@@ -357,8 +357,16 @@ export default function Home({ typeFilter }: HomeProps = {}) {
       const animes = data.heroItems.filter((i: any) => i.source === 'anilist' || i.anime_format || (i.origin_country && i.origin_country.includes('JP')));
       return animes.length > 0 ? animes : data.heroItems;
     }
+    if (typeFilter === 'sports') {
+      const sports = (data.sports || []).filter((i: any) => i.backdrop_path);
+      return sports.length > 0 ? sports : data.heroItems;
+    }
+    if (typeFilter === 'sparks') {
+      const sparks = (data.top10 || data.trending || []).filter((i: any) => i.backdrop_path);
+      return sparks.length > 0 ? sparks : data.heroItems;
+    }
     return data.heroItems;
-  }, [data.heroItems, typeFilter]);
+  }, [data.heroItems, data.sports, data.top10, data.trending, typeFilter]);
 
   return (
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-full max-w-[100vw]">

@@ -114,8 +114,8 @@ export default function Navbar() {
     <header 
       className="relative w-full z-[100] bg-black px-4 sm:px-8 lg:px-[56px] pt-4 sm:pt-5 pb-2 flex items-center justify-between select-none"
     >
-      {/* LEFT: Existing Miyoro Logo */}
-      <div className="flex items-center z-10 shrink-0">
+      {/* LEFT: Miyoro Logo (Visible on mobile where sidebar is bottom navigation) */}
+      <div className="flex md:hidden items-center z-10 shrink-0">
         <h1 
           onClick={() => {
             if (location.pathname === '/home' && !searchParams.get('type')) {

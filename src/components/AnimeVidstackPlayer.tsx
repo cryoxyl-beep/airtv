@@ -35,9 +35,13 @@ export default function AnimeVidstackPlayer({
   // Reset resumed flag when stream URL changes (e.g., episode or server change)
   useEffect(() => {
     resumedRef.current = false;
+    if (playerRef.current) {
+      playerRef.current.muted = true;
+      playerRef.current.play().catch(() => {});
+    }
   }, [stream.hlsProxyUrl]);
 
-  // Handle resume playback on canPlay
+  // Handle resume playback on canPlay and ensure autoplay
   const handleCanPlay = () => {
     if (!resumedRef.current && initialTime > 5 && playerRef.current) {
       try {
@@ -47,6 +51,8 @@ export default function AnimeVidstackPlayer({
         console.warn('Failed to seek to initial resume time:', err);
       }
     }
+    // Attempt play immediately (works reliably because muted=true)
+    playerRef.current?.play().catch(() => {});
   };
 
   const handleTimeUpdate = (detail: MediaTimeUpdateEventDetail) => {
@@ -98,7 +104,7 @@ export default function AnimeVidstackPlayer({
         poster={poster}
         autoPlay
         playsInline
-        muted={getVideoMutedPreference()}
+        muted={true}
         onCanPlay={handleCanPlay}
         onTimeUpdate={handleTimeUpdate}
         onEnded={onEnded}

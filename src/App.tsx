@@ -59,6 +59,9 @@ export default function App() {
             <Route path="/shows" element={<Home typeFilter="shows" />} />
             <Route path="/anime" element={<Home typeFilter="anime" />} />
             <Route path="/movies" element={<Home typeFilter="movies" />} />
+            <Route path="/sports" element={<Home typeFilter="sports" />} />
+            <Route path="/sparks" element={<Home typeFilter="sparks" />} />
+            <Route path="/categories" element={<Home typeFilter="categories" />} />
             <Route path="/myspace" element={<MySpace />} />
             <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />
             <Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />

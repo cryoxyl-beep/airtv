@@ -122,7 +122,7 @@ export default function MiyoroVidstackPlayer({
   const [duration, setDuration] = useState<number>(0);
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [volume, setVolume] = useState<number>(1);
-  const [isMuted, setIsMuted] = useState<boolean>(getVideoMutedPreference());
+  const [isMuted, setIsMuted] = useState<boolean>(true);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(true);
@@ -340,7 +340,7 @@ export default function MiyoroVidstackPlayer({
     }
   };
 
-  // CanPlay: Resume previous playback position
+  // CanPlay: Resume previous playback position and trigger autoplay (muted)
   const handleCanPlay = () => {
     setIsBuffering(false);
     setIsChangingSource(false);
@@ -356,7 +356,23 @@ export default function MiyoroVidstackPlayer({
         console.warn('Seeking to resume position failed:', err);
       }
     }
+
+    // Autoplay (will succeed because muted=true)
+    if (playerRef.current) {
+      playerRef.current.muted = true;
+      playerRef.current.play().catch((err) => {
+        console.warn('Autoplay waiting for user interaction or blocked:', err);
+      });
+    }
   };
+
+  // Immediate autoplay trigger when source changes
+  useEffect(() => {
+    if (playerRef.current && proxyUrl) {
+      playerRef.current.muted = true;
+      playerRef.current.play().catch(() => {});
+    }
+  }, [proxyUrl]);
 
   // Periodic time updates
   const handleTimeUpdate = (detail: MediaTimeUpdateEventDetail) => {
