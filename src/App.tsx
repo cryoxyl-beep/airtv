@@ -8,7 +8,6 @@ import BrowsePage from './pages/BrowsePage';
 import SearchPage from './pages/SearchPage';
 import MySpace from './pages/MySpace';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
-import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -39,7 +38,6 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-black text-white flex flex-col">
       <Sidebar />
       <div className={`flex-1 transition-all duration-300 ${!isImmersive ? 'md:pl-[80px] pb-16 md:pb-0' : 'p-0'}`}>
-        {!isImmersive && <Navbar />}
         {children}
       </div>
     </div>

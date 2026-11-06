@@ -8,7 +8,7 @@ import EpisodeOverlay from '../components/EpisodeOverlay';
 import AnimeVidstackPlayer from '../components/AnimeVidstackPlayer';
 import MiyoroVidstackPlayer from '../components/MiyoroVidstackPlayer';
 import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
-import { fetchMovyPlay, fetchMovySeason, MovySource } from '../api/movy';
+import { fetchMovyPlay, fetchMovySeason, MovySource, MovySubtitle } from '../api/movy';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
 import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
 import { ListVideo, RefreshCw } from 'lucide-react';
@@ -34,6 +34,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   // Dedicated Native Movie & TV Movy Stream State (Server: Miyoro)
   const [movySources, setMovySources] = useState<MovySource[]>([]);
+  const [movySubtitles, setMovySubtitles] = useState<MovySubtitle[]>([]);
   const [movyLoading, setMovyLoading] = useState<boolean>(false);
   const [movyError, setMovyError] = useState<string | null>(null);
 
@@ -91,12 +92,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
     setMovyLoading(true);
     setMovyError(null);
     setMovySources([]);
+    setMovySubtitles([]);
 
     fetchMovyPlay(type as 'movie' | 'tv', id, activeSeason, activeEpisode, controller.signal)
       .then((res) => {
         if (!isMounted) return;
         if (res.sources && res.sources.length > 0) {
           setMovySources(res.sources);
+          setMovySubtitles(res.subtitles || []);
         } else {
           setMovyError('Stream unavailable. You can retry or switch to another server.');
         }
@@ -674,6 +677,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                       .then((res) => {
                         if (res.sources && res.sources.length > 0) {
                           setMovySources(res.sources);
+                          setMovySubtitles(res.subtitles || []);
                         } else {
                           setMovyError('Stream unavailable. You can retry or switch to another server.');
                         }
@@ -700,6 +704,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
           ) : movySources.length > 0 ? (
             <MiyoroVidstackPlayer
               sources={movySources}
+              subtitles={movySubtitles}
               title={mediaTitle}
               poster={posterUrl}
               type={type as 'movie' | 'tv'}

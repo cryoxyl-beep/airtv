@@ -11,9 +11,15 @@ export interface MovySource {
   format: 'hls' | 'dash' | 'mp4' | string;
 }
 
+export interface MovySubtitle {
+  lang: string;
+  language: string;
+  url: string;
+}
+
 export interface MovyPlayResponse {
   sources: MovySource[];
-  subtitles: any[];
+  subtitles: MovySubtitle[];
   thumbnail?: string | null;
 }
 
