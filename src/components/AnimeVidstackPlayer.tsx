@@ -102,6 +102,7 @@ export default function AnimeVidstackPlayer({
         title={title}
         src={{ src: stream.hlsProxyUrl, type: 'application/x-mpegurl' }}
         poster={poster}
+        crossOrigin="anonymous"
         autoPlay
         playsInline
         muted={true}

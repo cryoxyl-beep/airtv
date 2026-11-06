@@ -325,6 +325,10 @@ export default function MiyoroVidstackPlayer({
   const handleProviderChange = (provider: any) => {
     if (!provider) return;
 
+    if ((provider as any).video) {
+      (provider as any).video.crossOrigin = 'anonymous';
+    }
+
     if (isHLSProvider(provider)) {
       (provider as any).config = {
         // Movy's variant playlists can be huge (700KB-1.5MB). Allow generous timeouts.
@@ -540,6 +544,7 @@ export default function MiyoroVidstackPlayer({
             type: sourceType,
           }}
           poster={poster}
+          crossOrigin="anonymous"
           autoPlay
           playsInline
           muted={isMuted}
