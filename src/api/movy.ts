@@ -72,8 +72,8 @@ export interface MovySeasonResponse {
  */
 export function buildMovyProxyUrl(sourceUrl: string): string {
   if (!sourceUrl) return '';
-  // Avoid double-encoding
-  const cleanUrl = sourceUrl.trim();
+  // Avoid double-encoding and decode any XML entities first
+  const cleanUrl = sourceUrl.trim().replace(/&amp;/g, '&');
   return `${MOV_API_BASE}/api/stream?url=${encodeURIComponent(cleanUrl)}`;
 }
 

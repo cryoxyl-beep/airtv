@@ -24,12 +24,43 @@ import {
   Check,
   FastForward,
 } from 'lucide-react';
-import { MovySource, buildMovyProxyUrl, getMovyMimeType } from '../api/movy';
+import { MovySource } from '../api/movy';
 import { getVideoMutedPreference, setVideoMutedPreference } from '../utils/preferences';
 import * as dashjs from 'dashjs';
+import Hls from 'hls.js';
 
 if (typeof window !== 'undefined' && !(window as any).dashjs) {
   (window as any).dashjs = (dashjs as any).default || dashjs;
+}
+
+// Movy rotates CDN hosts. Add new ones here as they appear.
+const MOVY_CDN_PATTERNS = [
+  'finalsignal.top',
+  'goldenkite.top',
+  'urbanmesa.top',
+  'anipixcdn.co',
+  'wellsrobertsonkmlt.workers.dev',
+];
+
+function isMovyCdnUrl(url: string): boolean {
+  return MOVY_CDN_PATTERNS.some((p) => url.includes(p));
+}
+
+function proxyWrap(url: string): string {
+  // Decode any XML entities first (Shaka sometimes leaves &amp; in URLs)
+  const cleaned = url.replace(/&amp;/g, '&');
+  return `https://movy-scraper.vercel.app/api/stream?url=${encodeURIComponent(cleaned)}`;
+}
+
+// Custom hls.js loader that wraps movy CDN URLs through /api/stream
+class ProxyHlsLoader extends Hls.DefaultConfig.loader {
+  load(context: any, config: any, callbacks: any) {
+    const url = context.url;
+    if (url && !url.includes('/api/stream?url=') && isMovyCdnUrl(url)) {
+      context.url = proxyWrap(url);
+    }
+    super.load(context, config, callbacks);
+  }
 }
 
 export interface MiyoroVidstackPlayerProps {
@@ -119,8 +150,12 @@ export default function MiyoroVidstackPlayer({
   const safeSourceIndex = Math.min(Math.max(0, currentSourceIndex), Math.max(0, sources.length - 1));
   const activeSource: MovySource | undefined = sources[safeSourceIndex] || sources[0];
 
-  const proxiedStreamUrl = activeSource?.url ? buildMovyProxyUrl(activeSource.url) : '';
-  const mimeType = activeSource ? getMovyMimeType(activeSource.format, activeSource.url) : 'application/x-mpegurl';
+  const proxyUrl = activeSource?.url ? proxyWrap(activeSource.url) : '';
+  const sourceType = activeSource?.format === 'hls'
+    ? 'application/x-mpegurl'
+    : activeSource?.format === 'dash'
+      ? 'application/dash+xml'
+      : 'video/mp4';
 
   // Trigger flash icon feedback on central action
   const triggerFlash = (icon: 'play' | 'pause' | 'forward' | 'rewind') => {
@@ -272,27 +307,89 @@ export default function MiyoroVidstackPlayer({
     setShowSettings(false);
   };
 
-  // Provider configuration (60s minimum timeout for Movy CDN manifest throttling)
+  // Provider configuration with CDN URL rewrite request filters (60s minimum timeout for Movy CDN manifest throttling)
   const handleProviderChange = (provider: any) => {
-    if (isHLSProvider(provider)) {
-      provider.config = {
-        manifestLoadingTimeOut: 60000,
-        manifestLoadingMaxRetry: 6,
-        fragLoadingTimeOut: 60000,
-        fragLoadingMaxRetry: 6,
-        levelLoadingTimeOut: 60000,
-        levelLoadingMaxRetry: 6,
-      };
-    } else if (isDASHProvider(provider)) {
-      provider.config = {
+    if (!provider) return;
+
+    if (isDASHProvider(provider)) {
+      // Shaka config with retry parameters (movy's CDN throttles, so be generous)
+      (provider as any).config = {
         streaming: {
-          retryIntervals: {
-            MPD: 2000,
-          },
-          retryAttempts: {
-            MPD: 6,
+          retryParameters: {
+            maxAttempts: 5,
+            baseDelay: 1000,
+            backoffFactor: 1.5,
+            fuzzFactor: 0.5,
+            timeout: 30000,
           },
         },
+        manifest: {
+          retryParameters: {
+            maxAttempts: 3,
+            baseDelay: 1000,
+            backoffFactor: 1.5,
+            fuzzFactor: 0.5,
+            timeout: 60000,
+          },
+        },
+      };
+
+      // Register request filter on Shaka's networking engine — this is the magic.
+      // Every URL Shaka tries to fetch (manifest, init segment, media segment,
+      // audio track) goes through this filter. If it's a movy CDN URL, wrap it
+      // through /api/stream.
+      const registerShakaOrDashFilters = () => {
+        const shakaInstance = provider.instance as any;
+        const engine = shakaInstance?.getNetworkingEngine?.();
+        if (engine && !engine._movyFilterRegistered) {
+          engine._movyFilterRegistered = true;
+          engine.registerRequestFilter((type: any, request: any) => {
+            if (request?.uris && request.uris.length > 0) {
+              const uri = request.uris[0];
+              if (!uri || uri.includes('/api/stream?url=')) return;
+              if (isMovyCdnUrl(uri)) {
+                request.uris = [proxyWrap(uri)];
+              }
+            }
+          });
+        }
+
+        // Also support dash.js request modification if dash.js is used under the hood
+        if (shakaInstance?.extend && !shakaInstance._movyModifierRegistered) {
+          shakaInstance._movyModifierRegistered = true;
+          shakaInstance.extend('RequestModifier', () => ({
+            modifyRequestURL: (url: string) => {
+              if (url && !url.includes('/api/stream?url=') && isMovyCdnUrl(url)) {
+                return proxyWrap(url);
+              }
+              return url;
+            },
+          }), true);
+        }
+      };
+
+      registerShakaOrDashFilters();
+      const timer = setInterval(registerShakaOrDashFilters, 50);
+      setTimeout(() => clearInterval(timer), 3000);
+    }
+
+    if (isHLSProvider(provider)) {
+      (provider as any).config = {
+        // Movy's variant playlists can be huge (700KB-1.5MB). Allow generous timeouts.
+        manifestLoadingTimeOut: 60000,
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingTimeOut: 60000,
+        levelLoadingMaxRetry: 4,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingTimeOut: 60000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 500,
+        audioTrackLoadingTimeOut: 60000,
+        audioTrackLoadingMaxRetry: 4,
+        audioTrackLoadingRetryDelay: 1000,
+        // Use our custom loader that wraps movy URLs through /api/stream
+        loader: ProxyHlsLoader as any,
       };
     }
   };
@@ -385,12 +482,15 @@ export default function MiyoroVidstackPlayer({
       className="relative w-full h-full bg-black select-none overflow-hidden font-sans group/player cursor-default"
     >
       {/* Vidstack Headless Media Player with format-aware source */}
-      {proxiedStreamUrl && (
+      {proxyUrl && (
         <MediaPlayer
           ref={playerRef}
-          key={`movy-${proxiedStreamUrl}`}
+          key={`movy-${proxyUrl}`}
           title={title}
-          src={{ src: proxiedStreamUrl, type: mimeType }}
+          src={{
+            src: proxyUrl,
+            type: sourceType,
+          }}
           poster={poster}
           autoPlay
           playsInline
