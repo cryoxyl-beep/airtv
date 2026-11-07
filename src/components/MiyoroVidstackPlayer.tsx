@@ -703,14 +703,14 @@ export default function MiyoroVidstackPlayer({
       {/* Stream first loading or quality/server change: solid black background */}
       {(isStreamLoading || isChangingSource) && (
         <div className="absolute inset-0 z-25 bg-black flex items-center justify-center">
-          <MiyoroLoader size={80} color="#ffffff" />
+          <MiyoroLoader size={96} color="#ffffff" />
         </div>
       )}
 
       {/* Playback buffering: semi-transparent black background (~40%) after 300ms delay, does NOT block controls */}
       {showBufferingOverlay && !isStreamLoading && !isChangingSource && (
         <div className="absolute inset-0 z-25 bg-black/40 flex items-center justify-center pointer-events-none">
-          <MiyoroLoader size={80} color="#ffffff" />
+          <MiyoroLoader size={96} color="#ffffff" />
         </div>
       )}
 

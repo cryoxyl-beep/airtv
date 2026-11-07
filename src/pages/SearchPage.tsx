@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import { searchMovies, searchTV, fetchTrending, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { searchAnime, fetchTrendingAnime } from '../api/anilist';
+import { SkeletonGrid } from '../components/MiyoroSkeletons';
+import EmptyState from '../components/MiyoroEmptyStates';
+import { LoadingButton } from '../components/MiyoroSpinner';
 
 type FilterType = 'all' | 'movies' | 'series' | 'anime';
 
@@ -39,6 +42,22 @@ export default function SearchPage() {
   const [trendingItems, setTrendingItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
+  const [searchError, setSearchError] = useState(false);
+  const [isRetryingSearch, setIsRetryingSearch] = useState(false);
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Recent searches stored in localStorage
   const [recentSearches, setRecentSearches] = useState<string[]>(() => {
@@ -159,6 +178,7 @@ export default function SearchPage() {
         return;
       }
       setLoading(true);
+      setSearchError(false);
       setResults([]);
 
       try {
@@ -195,6 +215,7 @@ export default function SearchPage() {
         }
       } catch (e) {
         console.error('Search failed', e);
+        setSearchError(true);
       } finally {
         setLoading(false);
       }
@@ -202,6 +223,45 @@ export default function SearchPage() {
 
     fetchResults();
   }, [query, filter]);
+
+  const handleRetrySearch = async () => {
+    setIsRetryingSearch(true);
+    setSearchError(false);
+    try {
+      if (filter === 'movies') {
+        const data = await searchMovies(query);
+        setResults(data.results || []);
+      } else if (filter === 'series') {
+        const data = await searchTV(query);
+        setResults(data.results || []);
+      } else if (filter === 'anime') {
+        const data = await searchAnime(query);
+        setResults(data.results || []);
+      } else {
+        const [movies, tv, anime] = await Promise.all([
+          searchMovies(query),
+          searchTV(query),
+          searchAnime(query),
+        ]);
+        const maxLength = Math.max(
+          movies.results?.length || 0,
+          tv.results?.length || 0,
+          anime.results?.length || 0
+        );
+        const interleaved = [];
+        for (let i = 0; i < maxLength; i++) {
+          if (movies.results && movies.results[i]) interleaved.push(movies.results[i]);
+          if (tv.results && tv.results[i]) interleaved.push(tv.results[i]);
+          if (anime.results && anime.results[i]) interleaved.push(anime.results[i]);
+        }
+        setResults(interleaved);
+      }
+    } catch (e) {
+      setSearchError(true);
+    } finally {
+      setIsRetryingSearch(false);
+    }
+  };
 
   const handleFilterClick = (newFilter: FilterType) => {
     navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${newFilter}`);
@@ -439,23 +499,33 @@ export default function SearchPage() {
           )}
         </div>
 
-        {/* 5. Portrait Poster Cards Grid (aspect-[2/3], title, star rating, year, type) */}
-        {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 sm:gap-5">
-            {[...Array(14)].map((_, i) => (
-              <div key={i} className="flex flex-col space-y-2.5 animate-pulse">
-                <div className="aspect-[2/3] w-full bg-white/5 rounded-xl border border-white/5" />
-                <div className="h-4 bg-white/10 rounded w-3/4" />
-                <div className="h-3 bg-white/5 rounded w-1/2" />
-              </div>
-            ))}
+        {/* 5. Content Grid / Skeletons / Empty States */}
+        {!isOnline ? (
+          <div className="py-16 flex justify-center">
+            <EmptyState variant="offline" />
+          </div>
+        ) : searchError ? (
+          <div className="py-16 flex justify-center">
+            <EmptyState
+              variant="error"
+              action={
+                <LoadingButton
+                  loading={isRetryingSearch}
+                  onClick={handleRetrySearch}
+                  className="px-6 py-2.5 rounded-full bg-white text-black font-semibold text-xs sm:text-sm hover:bg-white/90 transition-all cursor-pointer shadow-lg"
+                >
+                  Try again
+                </LoadingButton>
+              }
+            />
+          </div>
+        ) : isLoading ? (
+          <div className="pt-2">
+            <SkeletonGrid count={14} minWidth={160} />
           </div>
         ) : isSearching && activeList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-white/40 text-center space-y-2">
-            <p className="text-lg font-medium">No results found for "{query}"</p>
-            <p className="text-xs sm:text-sm text-white/30">
-              Try checking your spelling or searching for a different keyword.
-            </p>
+          <div className="py-16 flex justify-center">
+            <EmptyState variant="search" />
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 sm:gap-5">

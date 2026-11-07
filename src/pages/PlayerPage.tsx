@@ -13,6 +13,7 @@ import { fetchMovyPlay, fetchMovySeason, MovySource, MovySubtitle } from '../api
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
 import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
 import { ListVideo, RefreshCw } from 'lucide-react';
+import { LoadingButton } from '../components/MiyoroSpinner';
 
 export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' | 'anime' }) {
   const { type: paramType, id, season, episode } = useParams();
@@ -420,7 +421,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <MiyoroLoader size={80} color="#ffffff" />
+        <MiyoroLoader size={96} color="#ffffff" />
       </div>
     );
   }
@@ -578,13 +579,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         {type === 'anime' && provider === 'miyoro' ? (
           animeStreamLoading ? (
             <div className="w-full h-full flex items-center justify-center bg-black">
-              <MiyoroLoader size={80} color="#ffffff" />
+              <MiyoroLoader size={96} color="#ffffff" />
             </div>
           ) : animeStreamError ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
               <p className="text-sm md:text-base text-red-400 max-w-md">{animeStreamError}</p>
               <div className="flex items-center gap-3">
-                <button
+                <LoadingButton
+                  loading={animeStreamLoading}
                   onClick={() => {
                     setAnimeStreamError(null);
                     setAnimeStreamLoading(true);
@@ -602,7 +604,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>Retry</span>
-                </button>
+                </LoadingButton>
                 <button
                   onClick={() => setProvider('vidly')}
                   className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium text-xs md:text-sm border border-white/20 transition-all cursor-pointer"
@@ -662,13 +664,14 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         type !== 'anime' && provider === 'miyoro' ? (
           movyLoading ? (
             <div className="w-full h-full flex items-center justify-center bg-black">
-              <MiyoroLoader size={80} color="#ffffff" />
+              <MiyoroLoader size={96} color="#ffffff" />
             </div>
           ) : movyError ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
               <p className="text-sm md:text-base text-red-400 max-w-md">{movyError}</p>
               <div className="flex items-center gap-3">
-                <button
+                <LoadingButton
+                  loading={movyLoading}
                   onClick={() => {
                     setMovyError(null);
                     setMovyLoading(true);
@@ -691,7 +694,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
                 >
                   <RefreshCw className="w-4 h-4" />
                   <span>Retry</span>
-                </button>
+                </LoadingButton>
                 <button
                   onClick={() => setProvider('vidly')}
                   className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-medium text-xs md:text-sm border border-white/20 transition-all cursor-pointer"

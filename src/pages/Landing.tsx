@@ -6,6 +6,7 @@ import { fetchTrendingAnime } from '../api/anilist';
 import { preloadHomeData } from './Home';
 import { ChevronRight, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { LoadingButton } from '../components/MiyoroSpinner';
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -203,17 +204,17 @@ export default function Landing() {
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <button 
+                <LoadingButton 
+                  loading={isSigningIn}
                   onClick={handleGoogleLogin}
-                  className={`text-left group flex flex-col gap-1 w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-out hover:translate-x-1 ${isSigningIn ? 'opacity-50 cursor-wait' : ''}`}
-                  disabled={isSigningIn}
+                  className={`text-left group flex flex-col gap-1 w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-out hover:translate-x-1 ${isSigningIn ? 'opacity-70 cursor-wait' : ''}`}
                 >
                   <span className="text-white text-xl md:text-2xl font-semibold tracking-wide flex items-center gap-3">
                     <GoogleIcon className={`w-6 h-6 ${!isSigningIn && 'group-hover:scale-110'} transition-transform duration-300`} />
-                    {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+                    <span>{isSigningIn ? 'Signing in...' : 'Sign in with Google'}</span>
                   </span>
                   <div className="h-[2px] w-0 bg-white group-hover:w-full transition-all duration-500 ease-out" />
-                </button>
+                </LoadingButton>
                 {authError && <p className="text-red-400 text-sm ml-1 opacity-90">{authError}</p>}
               </div>
             )}

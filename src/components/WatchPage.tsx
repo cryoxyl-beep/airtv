@@ -389,7 +389,7 @@ export default function WatchPage({
             {logoUrl ? (
               <img
                 src={logoUrl}
-                alt={item?.title || item?.name}
+                alt={typeof item?.title === 'string' ? item.title : item?.title?.english || item?.name || 'Title'}
                 onError={() => {
                   setLogoUrl(null);
                 }}
@@ -397,7 +397,7 @@ export default function WatchPage({
               />
             ) : (
               <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white drop-shadow-xl text-left">
-                {item?.title || item?.name}
+                {typeof item?.title === 'string' ? item.title : item?.title?.english || item?.title?.romaji || item?.name || 'Overview'}
               </h1>
             )}
           </div>

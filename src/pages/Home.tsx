@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
-import MiyoroLoader from '../components/MiyoroLoader';
-
-const MIN_SPLASH_MS = 1600;
+import LogoReveal from '../components/MiyoroLogoReveal';
+import { SkeletonHero, SkeletonRow } from '../components/MiyoroSkeletons';
+import EmptyState from '../components/MiyoroEmptyStates';
+import { LoadingButton } from '../components/MiyoroSpinner';
 import {
   fetchTrendingAnime,
   fetchNewlyAddedAnime,
@@ -283,13 +284,26 @@ export const preloadHomeData = async (): Promise<any> => {
   return homeLoadPromise;
 };
 
+let hasShownHomeReveal = false;
+
 interface HomeProps {
   typeFilter?: 'shows' | 'movies' | 'anime' | 'sports' | 'sparks' | 'categories';
 }
 
 export default function Home({ typeFilter }: HomeProps = {}) {
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashFading, setSplashFading] = useState(false);
+  // Only trigger LogoReveal on /home (including root landing when visiting /home)
+  const isHomeVisit = !typeFilter || window.location.pathname === '/home';
+  const shouldReveal = isHomeVisit && !hasShownHomeReveal;
+
+  const [showOverlay, setShowOverlay] = useState(shouldReveal);
+  const [overlayFading, setOverlayFading] = useState(false);
+  const [revealRound, setRevealRound] = useState(0);
+
+  const [homeReady, setHomeReady] = useState(Boolean(cachedHomeData));
+  const homeReadyRef = useRef(Boolean(cachedHomeData));
+  const [loadError, setLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+
   const [data, setData] = useState<any>(cachedHomeData || {
     heroItems: [],
     trending: [],
@@ -322,40 +336,95 @@ export default function Home({ typeFilter }: HomeProps = {}) {
     music: []
   });
 
+  // Track onDone event from LogoReveal
+  const handleRevealDone = () => {
+    if (homeReadyRef.current) {
+      hasShownHomeReveal = true;
+      setOverlayFading(true);
+      setTimeout(() => {
+        setShowOverlay(false);
+      }, 300);
+    } else {
+      // Home isn't ready when reveal finishes: restart reveal by changing round key
+      setRevealRound((r) => r + 1);
+    }
+  };
+
+  // 15-second safety timeout: never loop forever
   useEffect(() => {
-    let unmountTimer: ReturnType<typeof setTimeout> | null = null;
+    if (!showOverlay) return;
+
+    const safetyTimer = setTimeout(() => {
+      hasShownHomeReveal = true;
+      setShowOverlay(false);
+      if (!homeReadyRef.current) {
+        setLoadError(true);
+      }
+    }, 15000);
+
+    return () => clearTimeout(safetyTimer);
+  }, [showOverlay]);
+
+  // Keep home mounted and fetching underneath the overlay
+  useEffect(() => {
     let isMounted = true;
 
-    const windowLoaded = new Promise<void>((resolve) => {
-      if (document.readyState === 'complete') {
-        resolve();
-      } else {
-        window.addEventListener('load', () => resolve(), { once: true });
-      }
-    });
+    if (cachedHomeData) {
+      setData(cachedHomeData);
+      homeReadyRef.current = true;
+      setHomeReady(true);
+      return;
+    }
 
-    const fontsLoaded = (document.fonts ? document.fonts.ready : Promise.resolve()) as Promise<any>;
-    const minDelay = new Promise<void>((resolve) => setTimeout(resolve, MIN_SPLASH_MS));
-    const dataPromise = cachedHomeData ? Promise.resolve(cachedHomeData) : preloadHomeData();
-
-    Promise.all([windowLoaded, fontsLoaded, minDelay, dataPromise]).then(([_, __, ___, loaded]) => {
-      if (!isMounted) return;
-      if (loaded) {
-        setData(loaded);
-      }
-      setSplashFading(true);
-      unmountTimer = setTimeout(() => {
-        if (isMounted) setShowSplash(false);
-      }, 400);
-    });
+    preloadHomeData()
+      .then((loaded) => {
+        if (!isMounted) return;
+        if (loaded) {
+          setData(loaded);
+          setLoadError(false);
+        } else {
+          setLoadError(true);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load Home data:', err);
+        if (isMounted) setLoadError(true);
+      })
+      .finally(() => {
+        if (isMounted) {
+          homeReadyRef.current = true;
+          setHomeReady(true);
+        }
+      });
 
     return () => {
       isMounted = false;
-      if (unmountTimer) clearTimeout(unmountTimer);
     };
   }, []);
 
-  const heroItems = React.useMemo(() => {
+  const handleRetry = () => {
+    setIsRetrying(true);
+    setLoadError(false);
+    preloadHomeData()
+      .then((loaded) => {
+        if (loaded) {
+          setData(loaded);
+          setLoadError(false);
+        } else {
+          setLoadError(true);
+        }
+      })
+      .catch(() => {
+        setLoadError(true);
+      })
+      .finally(() => {
+        setIsRetrying(false);
+        homeReadyRef.current = true;
+        setHomeReady(true);
+      });
+  };
+
+  const heroItems = useMemo(() => {
     if (!data.heroItems || data.heroItems.length === 0) return [];
     if (typeFilter === 'shows') {
       const shows = data.heroItems.filter((i: any) => i.source === 'anilist' || i.media_type === 'tv' || i.first_air_date || i.number_of_seasons);
@@ -382,81 +451,115 @@ export default function Home({ typeFilter }: HomeProps = {}) {
 
   return (
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-full max-w-[100vw]">
-      {/* Splash Screen Loading with MiyoroLoader on /home */}
-      {showSplash && (
+      {/* 1. Full-screen LogoReveal Overlay on /home */}
+      {showOverlay && (
         <div 
-          className={`fixed inset-0 z-[9999] bg-black text-white flex items-center justify-center transition-opacity duration-400 ease-out pointer-events-auto ${
-            splashFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          className={`fixed inset-0 z-[9999] bg-black text-white flex items-center justify-center transition-opacity duration-300 ease-out pointer-events-auto ${
+            overlayFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
           }`}
-          aria-hidden={splashFading}
+          aria-hidden={overlayFading}
         >
-          <MiyoroLoader size={120} />
+          <LogoReveal key={revealRound} size={160} onDone={handleRevealDone} />
         </div>
       )}
 
-      {/* Hero Billboard */}
-      <Hero items={heroItems} />
+      {/* Skeletons when data is loading */}
+      {!homeReady && (
+        <div className="px-4 md:px-12 pt-6 space-y-8">
+          <SkeletonHero />
+          <div className="space-y-6 pt-4">
+            <SkeletonRow count={8} />
+            <SkeletonRow count={8} />
+            <SkeletonRow count={8} />
+          </div>
+        </div>
+      )}
 
-      {/* Content Feed with Continuous, Spaced Categories */}
-      <div className="relative z-20 flex flex-col gap-4 pt-8 md:pt-10">
-        
-        {/* Ranked Spotlight */}
-        <Row 
-          title="Trending Now" 
-          items={data.top10} 
-          isTop10={true} 
-        />
-        
-        {/* Curated Recommendations */}
-        <Row 
-          title="Suggested For You" 
-          items={data.trending.slice(4)} 
-        />
+      {/* Error State with Retry Button */}
+      {homeReady && loadError && (
+        <div className="py-20 px-4 flex flex-col items-center">
+          <EmptyState
+            variant="error"
+            action={
+              <LoadingButton
+                loading={isRetrying}
+                onClick={handleRetry}
+                className="px-6 py-2.5 rounded-full bg-white text-black font-bold hover:bg-white/90 transition-all text-sm cursor-pointer shadow-lg"
+              >
+                Try again
+              </LoadingButton>
+            }
+          />
+        </div>
+      )}
 
-        {/* All-Time Critically Acclaimed */}
-        <Row 
-          title="Masterpieces & Hall of Fame" 
-          items={data.topRated} 
-        />
+      {/* Main Home Content */}
+      {homeReady && !loadError && (
+        <>
+          {/* Hero Billboard */}
+          <Hero items={heroItems} />
 
-        {/* Streaming Providers */}
-        <PlatformRow />
-        
-        {/* High Energy & Combat */}
-        <Row title="Action & Adventure" items={data.action} />
-        <Row title="Martial Arts & Hand-to-Hand Combat" items={data.martialArts} />
-        <Row title="Grand Adventures & Quests" items={data.adventure} />
-        <Row title="High-Octane Sports & Rivalries" items={data.sports} />
-        <Row title="Mecha, Tech & Future Warfare" items={data.mecha} />
+          {/* Content Feed with Continuous, Spaced Categories */}
+          <div className="relative z-20 flex flex-col gap-4 pt-8 md:pt-10">
+            {/* Ranked Spotlight */}
+            <Row 
+              title="Trending Now" 
+              items={data.top10} 
+              isTop10={true} 
+            />
+            
+            {/* Curated Recommendations */}
+            <Row 
+              title="Suggested For You" 
+              items={data.trending.slice(4)} 
+            />
 
-        {/* Supernatural, Fantasy & Sci-Fi */}
-        <Row title="Supernatural & Dark Fantasy" items={data.supernatural} />
-        <Row title="Isekai & Alternate Realities" items={data.isekai} />
-        <Row title="Sci-Fi & Cyber Realms" items={data.scifi} />
-        <Row title="Cyberpunk & Dystopian Visions" items={data.cyberpunk} />
-        <Row title="Epic Fantasy & Mythic Worlds" items={data.fantasy} />
+            {/* All-Time Critically Acclaimed */}
+            <Row 
+              title="Masterpieces & Hall of Fame" 
+              items={data.topRated} 
+            />
 
-        {/* Survival, Thrillers & Suspense */}
-        <Row title="Survival Games & Apocalyptic Worlds" items={data.survival} />
-        <Row title="Horror & Dark Nightmares" items={data.horror} />
-        <Row title="Mind-Bending & Psychological Thrillers" items={data.thriller} />
-        <Row title="Mystery & Whodunits" items={data.mystery} />
-        <Row title="Espionage, War & Tactical Battles" items={data.military} />
-        <Row title="Crime, Heists & Underworld" items={data.crime} />
+            {/* Streaming Providers */}
+            <PlatformRow />
+            
+            {/* High Energy & Combat */}
+            <Row title="Action & Adventure" items={data.action} />
+            <Row title="Martial Arts & Hand-to-Hand Combat" items={data.martialArts} />
+            <Row title="Grand Adventures & Quests" items={data.adventure} />
+            <Row title="High-Octane Sports & Rivalries" items={data.sports} />
+            <Row title="Mecha, Tech & Future Warfare" items={data.mecha} />
 
-        {/* Comedy, Campus & Comfort */}
-        <Row title="Comedies & Laughs" items={data.comedy} />
-        <Row title="Campus Life & High School Dramas" items={data.teen} />
-        <Row title="Sitcoms & Bingeable Comfort" items={data.sitcom} />
-        <Row title="Warm & Cozy: Slice of Life" items={data.sliceOfLife} />
-        <Row title="Family & Heartfelt Animation" items={data.family} />
+            {/* Supernatural, Fantasy & Sci-Fi */}
+            <Row title="Supernatural & Dark Fantasy" items={data.supernatural} />
+            <Row title="Isekai & Alternate Realities" items={data.isekai} />
+            <Row title="Sci-Fi & Cyber Realms" items={data.scifi} />
+            <Row title="Cyberpunk & Dystopian Visions" items={data.cyberpunk} />
+            <Row title="Epic Fantasy & Mythic Worlds" items={data.fantasy} />
 
-        {/* Romance, Drama, Docs & Music */}
-        <Row title="Romance & Heartstrings" items={data.romance} />
-        <Row title="Gripping Drama & Emotional Tales" items={data.drama} />
-        <Row title="Real Stories & Documentaries" items={data.documentary} />
-        <Row title="Musical & Rhythmic Spotlight" items={data.music} />
-      </div>
+            {/* Survival, Thrillers & Suspense */}
+            <Row title="Survival Games & Apocalyptic Worlds" items={data.survival} />
+            <Row title="Horror & Dark Nightmares" items={data.horror} />
+            <Row title="Mind-Bending & Psychological Thrillers" items={data.thriller} />
+            <Row title="Mystery & Whodunits" items={data.mystery} />
+            <Row title="Espionage, War & Tactical Battles" items={data.military} />
+            <Row title="Crime, Heists & Underworld" items={data.crime} />
+
+            {/* Comedy, Campus & Comfort */}
+            <Row title="Comedies & Laughs" items={data.comedy} />
+            <Row title="Campus Life & High School Dramas" items={data.teen} />
+            <Row title="Sitcoms & Bingeable Comfort" items={data.sitcom} />
+            <Row title="Warm & Cozy: Slice of Life" items={data.sliceOfLife} />
+            <Row title="Family & Heartfelt Animation" items={data.family} />
+
+            {/* Romance, Drama, Docs & Music */}
+            <Row title="Romance & Heartstrings" items={data.romance} />
+            <Row title="Gripping Drama & Emotional Tales" items={data.drama} />
+            <Row title="Real Stories & Documentaries" items={data.documentary} />
+            <Row title="Musical & Rhythmic Spotlight" items={data.music} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

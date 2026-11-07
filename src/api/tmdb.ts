@@ -205,12 +205,41 @@ export const primeLogoCache = (type: string, id: number | string, logoFilePathOr
   }
 };
 
+const CURATED_LOGOS: Record<string, string> = {
+  // SPY x FAMILY
+  '140960': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  '142838': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  '158870': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  '158871': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  'tv_120089': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  'anime_140960': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  'anime_142838': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+  'anime_158870': 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png',
+};
+
+const getCuratedLogo = (item: any): string | null => {
+  if (!item) return null;
+  const rawTitle = typeof item.title === 'string' ? item.title : item.title?.english || item.title?.romaji || item.name || '';
+  if (/spy\s*[x×]\s*family/i.test(rawTitle)) {
+    return 'https://image.tmdb.org/t/p/w500/yNj1PfsuudXiXCpGgnMM3hE3b1P.png';
+  }
+  const idStr = String(item.id);
+  if (CURATED_LOGOS[idStr]) return CURATED_LOGOS[idStr];
+  const typeId = `${item.source || item.media_type || 'tv'}_${item.id}`;
+  if (CURATED_LOGOS[typeId]) return CURATED_LOGOS[typeId];
+  if (item.tmdb_id && CURATED_LOGOS[`tv_${item.tmdb_id}`]) return CURATED_LOGOS[`tv_${item.tmdb_id}`];
+  return null;
+};
+
 export const hasCachedLogoEntry = (item: any): boolean => {
   return Boolean(getCachedLogo(item));
 };
 
 export const getCachedLogo = (item: any): string | null => {
   if (!item) return null;
+
+  const curated = getCuratedLogo(item);
+  if (curated) return curated;
 
   if (typeof item.logo_path === 'string' && item.logo_path.length > 0) {
     const url = item.logo_path.startsWith('http')
@@ -263,6 +292,9 @@ export const getCachedLogo = (item: any): string | null => {
 
 export const resolveLogo = async (item: any): Promise<string | null> => {
   if (!item) return null;
+
+  const curated = getCuratedLogo(item);
+  if (curated) return curated;
 
   if (typeof item.logo_path === 'string' && item.logo_path.length > 0) {
     const url = item.logo_path.startsWith('http')

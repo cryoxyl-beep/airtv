@@ -163,14 +163,14 @@ export default function AnimeVidstackPlayer({
         {/* Stream initial loading or episode/server change: solid black background */}
         {isStreamLoading && (
           <div className="absolute inset-0 z-30 bg-black flex items-center justify-center">
-            <MiyoroLoader size={80} color="#ffffff" />
+            <MiyoroLoader size={96} color="#ffffff" />
           </div>
         )}
 
         {/* Video buffering during playback: semi-transparent ~40% after 300ms delay, pointer-events-none */}
         {showBufferingOverlay && !isStreamLoading && (
           <div className="absolute inset-0 z-30 bg-black/40 flex items-center justify-center pointer-events-none">
-            <MiyoroLoader size={80} color="#ffffff" />
+            <MiyoroLoader size={96} color="#ffffff" />
           </div>
         )}
 

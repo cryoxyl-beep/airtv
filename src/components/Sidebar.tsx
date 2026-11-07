@@ -1,67 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  House,
-  Search,
-  Tv,
-  Popcorn,
-  Dribbble,
-  Zap,
-  Columns2,
-  UserRound
-} from 'lucide-react';
+  HomeIcon,
+  SearchIcon,
+  TvIcon,
+  AnimeIcon,
+  MoviesIcon,
+  SportsIcon,
+  SparksIcon,
+  CategoriesIcon,
+} from './MiyoroIcons';
+import { UserRound } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-
-// Miyoro 4-Pointed Spark / Star Symbol
-function MiyoroSparkLogo({ className = 'w-6 h-6' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className={className}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M12 2C12 7.5 16.5 12 22 12C16.5 12 12 16.5 12 22C12 16.5 7.5 12 2 12C7.5 12 12 7.5 12 2Z" />
-    </svg>
-  );
-}
-
-// Anime Icon (Circle with Crescent Arc matching Miyoro / Binger reference)
-function AnimeIcon({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <circle cx="12" cy="12" r="9.5" />
-      <path d="M12 7.5a4.5 4.5 0 0 1 4.5 4.5c0 1.8-1 3.3-2.5 4" />
-      <circle cx="12" cy="12" r="1.25" fill="currentColor" />
-    </svg>
-  );
-}
-
-// Categories Split-Pill Layout Icon
-function CategoriesIcon({ className = 'w-5 h-5' }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect x="4" y="4" width="6.5" height="16" rx="2" />
-      <rect x="13.5" y="4" width="6.5" height="16" rx="2" />
-    </svg>
-  );
-}
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -79,28 +29,28 @@ export default function Sidebar() {
     {
       id: 'home',
       label: 'Home',
-      icon: House,
+      icon: HomeIcon,
       path: '/home',
       isActive: location.pathname === '/home',
     },
     {
       id: 'search',
       label: 'Search',
-      icon: Search,
+      icon: SearchIcon,
       path: '/search',
       isActive: location.pathname === '/search',
     },
     {
       id: 'tv',
       label: 'TV',
-      icon: Tv,
+      icon: TvIcon,
       path: '/shows',
       isActive: location.pathname === '/shows',
     },
     {
       id: 'anime',
       label: 'Anime',
-      customIcon: AnimeIcon,
+      icon: AnimeIcon,
       path: '/anime',
       isActive:
         location.pathname === '/anime' ||
@@ -109,28 +59,28 @@ export default function Sidebar() {
     {
       id: 'movies',
       label: 'Movies',
-      icon: Popcorn,
+      icon: MoviesIcon,
       path: '/movies',
       isActive: location.pathname === '/movies',
     },
     {
       id: 'sports',
       label: 'Sports',
-      icon: Dribbble,
+      icon: SportsIcon,
       path: '/sports',
       isActive: location.pathname === '/sports',
     },
     {
       id: 'sparks',
       label: 'Sparks',
-      icon: Zap,
+      icon: SparksIcon,
       path: '/sparks',
       isActive: location.pathname === '/sparks',
     },
     {
       id: 'categories',
       label: 'Categories',
-      customIcon: CategoriesIcon,
+      icon: CategoriesIcon,
       path: '/categories',
       isActive: location.pathname === '/categories' || location.pathname.startsWith('/browse/'),
     },
@@ -208,7 +158,6 @@ export default function Sidebar() {
         <nav className="w-full flex flex-col gap-1.5 py-1 relative">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const CustomIcon = item.customIcon;
 
             return (
               <div key={item.id} className="relative group/item w-full flex items-center">
@@ -244,14 +193,15 @@ export default function Sidebar() {
                             item.isActive ? 'border-white' : 'border-white/40'
                           }`}
                         />
-                      ) : CustomIcon ? (
-                        <CustomIcon className="w-[20px] h-[20px] transition-transform duration-200 group-hover/item:scale-105" />
-                      ) : Icon ? (
+                      ) : item.id === 'myspace' ? (
+                        <UserRound className="w-[20px] h-[20px] transition-transform duration-200 group-hover/item:scale-105" />
+                      ) : (
                         <Icon
-                          className="w-[20px] h-[20px] transition-transform duration-200 group-hover/item:scale-105"
-                          strokeWidth={2}
+                          size={24}
+                          active={item.isActive}
+                          className="transition-transform duration-200 group-hover/item:scale-105"
                         />
-                      ) : null}
+                      )}
                     </div>
                   </div>
 
@@ -294,7 +244,6 @@ export default function Sidebar() {
           )
           .map((item) => {
             const Icon = item.icon;
-            const CustomIcon = item.customIcon;
 
             return (
               <button
@@ -312,11 +261,11 @@ export default function Sidebar() {
                       alt="Profile"
                       className="w-5 h-5 rounded-full object-cover"
                     />
-                  ) : CustomIcon ? (
-                    <CustomIcon className="w-5 h-5" />
-                  ) : Icon ? (
-                    <Icon className="w-5 h-5" strokeWidth={2} />
-                  ) : null}
+                  ) : item.id === 'myspace' ? (
+                    <UserRound className="w-5 h-5" />
+                  ) : (
+                    <Icon size={24} active={item.isActive} />
+                  )}
                   {item.isActive && (
                     <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-white rounded-full shadow-[0_0_4px_white]" />
                   )}

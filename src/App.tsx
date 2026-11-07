@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Home from './pages/Home';
 import WatchPage from './pages/WatchPage';
@@ -7,6 +7,7 @@ import PlayerPage from './pages/PlayerPage';
 import BrowsePage from './pages/BrowsePage';
 import SearchPage from './pages/SearchPage';
 import MySpace from './pages/MySpace';
+import NotFound from './components/MiyoroNotFound';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
 import Sidebar from './components/Sidebar';
 import { AuthProvider } from './contexts/AuthContext';
@@ -44,6 +45,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   );
 }
 
+function NotFoundRoute() {
+  const navigate = useNavigate();
+  return <NotFound onHome={() => navigate('/home')} />;
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -71,7 +77,7 @@ export default function App() {
             <Route path="/play/anime/:id/:episode" element={<PlayerPage type="anime" />} />
             <Route path="/browse/:platform" element={<BrowsePage />} />
             <Route path="/search" element={<SearchPage />} />
-            <Route path="*" element={<Navigate to="/home" replace />} />
+            <Route path="*" element={<NotFoundRoute />} />
           </Routes>
         </AppLayout>
       </BrowserRouter>

@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { User, LogOut, Play, Film, Clock, Heart, ArrowRight } from 'lucide-react';
 import { fetchDetails, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { fetchAnimeDetails } from '../api/anilist';
+import EmptyState from '../components/MiyoroEmptyStates';
+import { LoadingButton } from '../components/MiyoroSpinner';
 
 interface WatchItem {
   key: string;
@@ -26,6 +28,7 @@ export default function MySpace() {
   const [continueWatching, setContinueWatching] = useState<WatchItem[]>([]);
   const [libraryItems, setLibraryItems] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     const loadSavedData = async () => {
@@ -161,14 +164,22 @@ export default function MySpace() {
                     <span>Sign Out</span>
                   </button>
                 ) : (
-                  <button
+                  <LoadingButton
                     type="button"
-                    onClick={() => signInWithGoogle().catch(() => {})}
+                    loading={isSigningIn}
+                    onClick={async () => {
+                      setIsSigningIn(true);
+                      try {
+                        await signInWithGoogle();
+                      } finally {
+                        setIsSigningIn(false);
+                      }
+                    }}
                     className="px-5 py-2.5 rounded-full bg-white hover:bg-white/90 text-black text-xs sm:text-sm font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer"
                   >
                     <User className="w-4 h-4" />
                     <span>Sign in with Google</span>
-                  </button>
+                  </LoadingButton>
                 )}
               </div>
             </div>
@@ -194,16 +205,8 @@ export default function MySpace() {
               ))}
             </div>
           ) : continueWatching.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-[#111111]/60 p-8 text-center space-y-3">
-              <p className="text-white/60 text-sm">No watch history yet. Start watching movies, series, or anime to resume playback here anytime.</p>
-              <button
-                type="button"
-                onClick={() => navigate('/home')}
-                className="px-5 py-2 rounded-full bg-white text-black font-semibold text-xs sm:text-sm hover:bg-white/90 transition-all cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <span>Browse Titles</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+            <div className="py-6 flex justify-center">
+              <EmptyState variant="history" />
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -284,8 +287,19 @@ export default function MySpace() {
           </div>
 
           {libraryItems.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-[#111111]/60 p-6 text-center text-white/50 text-sm">
-              Your library is currently empty. Click the library button while browsing any title to pin it here.
+            <div className="py-6 flex justify-center">
+              <EmptyState
+                variant="list"
+                action={
+                  <button
+                    type="button"
+                    onClick={() => navigate('/home')}
+                    className="px-5 py-2 rounded-full bg-white text-black font-semibold text-xs sm:text-sm hover:bg-white/90 transition-all cursor-pointer shadow-md"
+                  >
+                    Browse
+                  </button>
+                }
+              />
             </div>
           ) : (
             <div className="text-sm text-white/60">

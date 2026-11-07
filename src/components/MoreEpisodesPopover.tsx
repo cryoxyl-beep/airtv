@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo } from '../api/tmdb';
 import { Play, X } from 'lucide-react';
+import { SkeletonEpisodeList } from './MiyoroSkeletons';
 
 interface MoreEpisodesPopoverProps {
   isOpen: boolean;
@@ -220,13 +221,8 @@ export default function MoreEpisodesPopover({
             className="flex-1 overflow-y-auto p-4 md:p-6 space-y-3 relative [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent"
           >
             {loadingEpisodes && episodes.length === 0 ? (
-              <div className="space-y-3">
-                {[...Array(6)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="h-24 md:h-28 w-full bg-white/[0.04] rounded-xl animate-pulse border border-white/5"
-                  />
-                ))}
+              <div className="py-2">
+                <SkeletonEpisodeList count={6} />
               </div>
             ) : episodes.length === 0 ? (
               <div className="h-full flex items-center justify-center text-white/40 text-sm">
