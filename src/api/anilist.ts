@@ -205,10 +205,33 @@ const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = fals
   }
   
   const mapping = await resolveAnimeMapping(media.id);
+  const title = media.title?.english || media.title?.romaji || media.title?.native;
   const isMovieFormat = media.format === 'MOVIE' || mapping.type === 'MOVIE';
-  const tmdbId = isMovieFormat && mapping.tmdbMovieId ? mapping.tmdbMovieId : (mapping.tmdbTvId || mapping.tmdbMovieId);
-  const tmdbType = (isMovieFormat && mapping.tmdbMovieId) ? 'movie' : (mapping.tmdbTvId ? 'tv' : 'movie');
+  let tmdbId = isMovieFormat && mapping.tmdbMovieId ? mapping.tmdbMovieId : (mapping.tmdbTvId || mapping.tmdbMovieId);
+  let tmdbType = (isMovieFormat && mapping.tmdbMovieId) ? 'movie' : (mapping.tmdbTvId ? 'tv' : 'movie');
   const tmdbSeason = mapping.seasonMappingTVDB;
+
+  if (!skipTmdbImages && !tmdbId && title) {
+    try {
+      const clean = title.replace(/×/g, 'x').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+      const res = await fetch(`https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(clean)}&include_adult=false&language=en-US`, {
+        headers: {
+          accept: 'application/json',
+          Authorization: `Bearer ${TMDB_TOKEN}`
+        }
+      });
+      if (res.ok) {
+        const sData = await res.json();
+        const first = sData.results?.find((r: any) => (r.media_type === 'tv' || r.media_type === 'movie'));
+        if (first) {
+          tmdbId = first.id;
+          tmdbType = first.media_type;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
 
   let poster_path = media.coverImage?.extraLarge || media.coverImage?.large;
   let backdrop_path = media.bannerImage || media.coverImage?.extraLarge;
@@ -222,8 +245,6 @@ const normalizeAniListToTmdb = async (media: any, skipTmdbImages: boolean = fals
       if (tmdbImages.logo_path) logo_path = tmdbImages.logo_path;
     }
   }
-  
-  const title = media.title?.english || media.title?.romaji || media.title?.native;
 
   const normalized = {
     id: media.id,

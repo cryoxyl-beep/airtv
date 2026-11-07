@@ -6,6 +6,7 @@ import { defaultLayoutIcons, DefaultVideoLayout } from '@vidstack/react/player/l
 import { AnimeStreamResult } from '../api/anivault';
 import { getVideoMutedPreference } from '../utils/preferences';
 import { FastForward } from 'lucide-react';
+import MiyoroLoader from './MiyoroLoader';
 
 interface AnimeVidstackPlayerProps {
   stream: AnimeStreamResult;
@@ -32,14 +33,37 @@ export default function AnimeVidstackPlayer({
   const resumedRef = useRef<boolean>(false);
   const lastSavedTimeRef = useRef<number>(0);
 
-  // Reset resumed flag when stream URL changes (e.g., episode or server change)
+  // Loading and buffering state for MiyoroLoader
+  const [isStreamLoading, setIsStreamLoading] = useState<boolean>(true);
+  const [isBuffering, setIsBuffering] = useState<boolean>(false);
+  const [showBufferingOverlay, setShowBufferingOverlay] = useState<boolean>(false);
+
+  // Reset resumed flag and loading state when stream URL changes (e.g., episode or server change)
   useEffect(() => {
+    setIsStreamLoading(true);
+    setIsBuffering(false);
+    setShowBufferingOverlay(false);
     resumedRef.current = false;
     if (playerRef.current) {
       playerRef.current.muted = true;
       playerRef.current.play().catch(() => {});
     }
   }, [stream.hlsProxyUrl]);
+
+  // 300ms debounce for playback buffering overlay so tiny stalls don't flicker
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    if (isBuffering && !isStreamLoading) {
+      timer = setTimeout(() => {
+        setShowBufferingOverlay(true);
+      }, 300);
+    } else {
+      setShowBufferingOverlay(false);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isBuffering, isStreamLoading]);
 
   // Handle resume playback on canPlay and ensure autoplay
   const handleCanPlay = () => {
@@ -107,9 +131,18 @@ export default function AnimeVidstackPlayer({
         playsInline
         muted={true}
         onCanPlay={handleCanPlay}
+        onWaiting={() => setIsBuffering(true)}
+        onPlaying={() => {
+          setIsStreamLoading(false);
+          setIsBuffering(false);
+        }}
         onTimeUpdate={handleTimeUpdate}
         onEnded={onEnded}
-        onError={onError}
+        onError={(err) => {
+          setIsStreamLoading(false);
+          setIsBuffering(false);
+          if (onError) onError(err);
+        }}
         className="w-full h-full"
       >
         <MediaProvider>
@@ -126,6 +159,20 @@ export default function AnimeVidstackPlayer({
         </MediaProvider>
 
         <DefaultVideoLayout icons={defaultLayoutIcons} />
+
+        {/* Stream initial loading or episode/server change: solid black background */}
+        {isStreamLoading && (
+          <div className="absolute inset-0 z-30 bg-black flex items-center justify-center">
+            <MiyoroLoader size={80} color="#ffffff" />
+          </div>
+        )}
+
+        {/* Video buffering during playback: semi-transparent ~40% after 300ms delay, pointer-events-none */}
+        {showBufferingOverlay && !isStreamLoading && (
+          <div className="absolute inset-0 z-30 bg-black/40 flex items-center justify-center pointer-events-none">
+            <MiyoroLoader size={80} color="#ffffff" />
+          </div>
+        )}
 
         {/* Skip Intro Overlay Button */}
         {isIntroActive && (

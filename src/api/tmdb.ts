@@ -2,6 +2,14 @@ import { resolveAnimeMapping } from './fribb';
 
 const API_READ_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmYmM3ZjM4ZTEwNzBmMWI4NzM2MDc4OTM4MDA1OThkOSIsIm5iZiI6MTcxNzIxNDAzNi4wMzIsInN1YiI6IjY2NWE5YjU0M2MzMmNiMWFiZmFmMGFmOCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.BEKlgnL8r52GcU2Fb8QXcp3W9-giqabR8AtbBlGDmU0';
 
+export const fetchOptions = {
+  method: 'GET',
+  headers: {
+    accept: 'application/json',
+    Authorization: `Bearer ${API_READ_TOKEN}`
+  }
+};
+
 const BASE_URL = 'https://api.themoviedb.org/3';
 export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
 export const IMAGE_BASE_URL_ORIGINAL = 'https://image.tmdb.org/t/p/original';
@@ -99,19 +107,33 @@ export const extractBestLogoPath = (logos: any[]): string | null => {
   if (!Array.isArray(logos) || logos.length === 0) return null;
   const sorted = [...logos].sort((a: any, b: any) => (b.vote_average || 0) - (a.vote_average || 0));
   
-  // 1. Prefer English logo
+  // 1. Prefer English PNG logo
+  const enPng = sorted.find((l: any) => l.iso_639_1 === 'en' && l.file_path?.endsWith('.png'));
+  if (enPng?.file_path) return enPng.file_path;
+
+  // 2. Next, any English logo (including SVG)
   const enLogo = sorted.find((l: any) => l.iso_639_1 === 'en');
   if (enLogo?.file_path) return enLogo.file_path;
 
-  // 2. Next, null or empty language (common for textless/universal logos)
+  // 3. Next, null or empty language PNG (common for textless/universal logos)
+  const nullLangPng = sorted.find((l: any) => (!l.iso_639_1 || l.iso_639_1 === 'null' || l.iso_639_1 === '') && l.file_path?.endsWith('.png'));
+  if (nullLangPng?.file_path) return nullLangPng.file_path;
+
   const nullLangLogo = sorted.find((l: any) => !l.iso_639_1 || l.iso_639_1 === 'null' || l.iso_639_1 === '');
   if (nullLangLogo?.file_path) return nullLangLogo.file_path;
 
-  // 3. Next, Japanese logo (common for official anime title clear logos)
+  // 4. Next, Japanese PNG logo (common for official anime title clear logos)
+  const jaPng = sorted.find((l: any) => l.iso_639_1 === 'ja' && l.file_path?.endsWith('.png'));
+  if (jaPng?.file_path) return jaPng.file_path;
+
   const jaLogo = sorted.find((l: any) => l.iso_639_1 === 'ja');
   if (jaLogo?.file_path) return jaLogo.file_path;
 
-  // 4. Any logo with highest votes
+  // 5. Any PNG logo
+  const anyPng = sorted.find((l: any) => l.file_path?.endsWith('.png'));
+  if (anyPng?.file_path) return anyPng.file_path;
+
+  // 6. Any logo with highest votes
   return sorted[0]?.file_path || null;
 };
 
@@ -281,12 +303,16 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
       const rawTitle = item.title || item.name || '';
       if (rawTitle) {
         try {
-          const cleanQuery = rawTitle.replace(/[^\w\s]/g, ' ').trim();
+          const cleanQuery = rawTitle
+            .replace(/×/g, 'x')
+            .replace(/[^\w\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
           const searchRes = await fetch(`${BASE_URL}/search/multi?query=${encodeURIComponent(cleanQuery)}&include_adult=false&language=en-US`, fetchOptions);
           if (searchRes.ok) {
             const sData = await searchRes.json();
-            const first = sData.results?.[0];
-            if (first && (first.media_type === 'tv' || first.media_type === 'movie')) {
+            const first = sData.results?.find((r: any) => (r.media_type === 'tv' || r.media_type === 'movie'));
+            if (first) {
               item.tmdb_id = first.id;
               item.tmdb_type = first.media_type;
               info = getLogoCacheKey(item);
@@ -449,14 +475,6 @@ export const isAnime = (item: any): boolean => {
 export const filterOutAnime = (results: any[]): any[] => {
   if (!Array.isArray(results)) return [];
   return results.filter(item => !isAnime(item));
-};
-
-const fetchOptions = {
-  method: 'GET',
-  headers: {
-    accept: 'application/json',
-    Authorization: `Bearer ${API_READ_TOKEN}`
-  }
 };
 
 export const fetchTrending = async () => {

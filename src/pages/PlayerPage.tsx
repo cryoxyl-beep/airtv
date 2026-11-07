@@ -7,6 +7,7 @@ import { extractAnimeSeasons } from '../api/animeRelations';
 import EpisodeOverlay from '../components/EpisodeOverlay';
 import AnimeVidstackPlayer from '../components/AnimeVidstackPlayer';
 import MiyoroVidstackPlayer from '../components/MiyoroVidstackPlayer';
+import MiyoroLoader from '../components/MiyoroLoader';
 import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
 import { fetchMovyPlay, fetchMovySeason, MovySource, MovySubtitle } from '../api/movy';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
@@ -419,7 +420,7 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+        <MiyoroLoader size={80} color="#ffffff" />
       </div>
     );
   }
@@ -576,9 +577,8 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         {/* 1. NATIVE ANIME STREAM (Anivault API) */}
         {type === 'anime' && provider === 'miyoro' ? (
           animeStreamLoading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-white">
-              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-              <p className="text-sm text-white/60 font-medium">Loading Miyoro anime stream...</p>
+            <div className="w-full h-full flex items-center justify-center bg-black">
+              <MiyoroLoader size={80} color="#ffffff" />
             </div>
           ) : animeStreamError ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
@@ -661,9 +661,8 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
         ) : /* 2. NATIVE MOVIE & TV STREAM (Movy API + Vidstack Native Player) */
         type !== 'anime' && provider === 'miyoro' ? (
           movyLoading ? (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-3 text-white">
-              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-              <p className="text-sm text-white/60 font-medium">Loading Miyoro native stream...</p>
+            <div className="w-full h-full flex items-center justify-center bg-black">
+              <MiyoroLoader size={80} color="#ffffff" />
             </div>
           ) : movyError ? (
             <div className="w-full h-full flex flex-col items-center justify-center bg-black gap-4 text-white px-6 text-center">
@@ -747,6 +746,8 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
               onOpenEpisodes={() => setShowEpisodeOverlay(true)}
               onBack={() => navigate(-1)}
               serverSelector={serverSelectorNode}
+              provider={provider}
+              onSelectProvider={(p) => setProvider(p)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white">

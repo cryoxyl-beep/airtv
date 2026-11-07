@@ -69,7 +69,9 @@ export default function WatchPage({
   onPlayFromBeginning,
   onOpenMoreEpisodes,
 }: WatchPageProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(getCachedLogo(item));
+  const [logoUrl, setLogoUrl] = useState<string | null>(
+    () => getCachedLogo(item) || item?.logo_path || null
+  );
 
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerPlaying, setTrailerPlaying] = useState(false);
@@ -110,7 +112,9 @@ export default function WatchPage({
 
   useEffect(() => {
     let mounted = true;
-    setLogoUrl(getCachedLogo(item));
+    const initial = getCachedLogo(item) || item?.logo_path || null;
+    if (initial) setLogoUrl(initial);
+
     resolveLogo(item).then((url) => {
       if (mounted && url) {
         setLogoUrl(url);
@@ -381,16 +385,19 @@ export default function WatchPage({
       <div className="absolute inset-0 z-30 flex flex-col justify-center px-6 pt-20 pb-10 md:px-14 lg:px-20 w-full pointer-events-none">
         <div className="flex flex-col items-start justify-center gap-3 md:gap-3.5 max-w-[480px] lg:max-w-[520px] w-full pointer-events-none">
           {/* 2A. HD Clear Logo (or Plain Text Fallback ONLY when logo is unavailable) */}
-          <div className="mb-1 md:mb-2">
+          <div className="mb-1 md:mb-2 min-h-[44px] flex items-center">
             {logoUrl ? (
               <img
                 src={logoUrl}
-                alt={item.title || item.name}
+                alt={item?.title || item?.name}
+                onError={() => {
+                  setLogoUrl(null);
+                }}
                 className="max-h-20 md:max-h-28 lg:max-h-32 w-auto max-w-[260px] md:max-w-[380px] lg:max-w-[440px] object-contain object-left drop-shadow-[0_8px_24px_rgba(0,0,0,0.85)]"
               />
             ) : (
               <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white drop-shadow-xl text-left">
-                {item.title || item.name}
+                {item?.title || item?.name}
               </h1>
             )}
           </div>

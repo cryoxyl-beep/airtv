@@ -6,7 +6,6 @@ import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { extractAnimeSeasons } from '../api/animeRelations';
 import WatchPageContent from '../components/WatchPage';
 import MoreEpisodesPopover from '../components/MoreEpisodesPopover';
-import { ArrowLeft } from 'lucide-react';
 import WatchPageSkeleton from '../components/WatchPageSkeleton';
 import { getWatchProgress, saveWatchProgress } from '../utils/preferences';
 
@@ -270,9 +269,6 @@ export default function WatchPage({ type }: WatchPageProps) {
   if (loading && !data) {
     return (
       <div className="min-h-screen bg-black font-sans text-white relative overflow-hidden">
-        <div className="absolute top-0 left-0 p-6 z-50 flex items-center gap-4">
-          <div className="w-12 h-12 bg-white/10 rounded-full animate-pulse" />
-        </div>
         <div className="w-full relative bg-black">
           <WatchPageSkeleton type={type === 'anime' ? 'tv' : type} />
         </div>
@@ -293,14 +289,6 @@ export default function WatchPage({ type }: WatchPageProps) {
       </div>
     );
   }
-
-  const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
-  };
 
   const handlePrimaryPlay = () => {
     if (!id) return;
@@ -357,21 +345,10 @@ export default function WatchPage({ type }: WatchPageProps) {
 
   return (
     <div className="min-h-screen bg-black font-sans text-white relative overflow-hidden">
-      {/* Minimal Top Back Button */}
-      <div className="absolute top-0 left-0 p-6 z-40 flex items-center gap-4">
-        <button
-          onClick={handleBack}
-          className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
-          aria-label="Go Back"
-        >
-          <ArrowLeft size={24} className="group-hover:-translate-x-1 transition-transform" />
-        </button>
-      </div>
-
       {/* Full-Viewport Cinematic Watch Page */}
       <div className="w-full relative bg-black">
         <WatchPageContent
-          item={data}
+          item={data ? { ...data, logo_path: resolvedLogoUrl || data.logo_path } : null}
           type={type}
           seasonNumber={type === 'tv' ? resolvedSeason : 1}
           episodeNumber={type === 'tv' || type === 'anime' ? resolvedEpisode : 1}

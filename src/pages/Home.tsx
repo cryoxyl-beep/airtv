@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
+import MiyoroLoader from '../components/MiyoroLoader';
+
+const MIN_SPLASH_MS = 1600;
 import {
   fetchTrendingAnime,
   fetchNewlyAddedAnime,
@@ -285,8 +288,8 @@ interface HomeProps {
 }
 
 export default function Home({ typeFilter }: HomeProps = {}) {
-  const [isLoading, setIsLoading] = useState(!cachedHomeData);
-  const [isFadingOut, setIsFadingOut] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
+  const [splashFading, setSplashFading] = useState(false);
   const [data, setData] = useState<any>(cachedHomeData || {
     heroItems: [],
     trending: [],
@@ -320,26 +323,35 @@ export default function Home({ typeFilter }: HomeProps = {}) {
   });
 
   useEffect(() => {
-    if (cachedHomeData) {
-      setData(cachedHomeData);
-      setIsLoading(false);
-      return;
-    }
+    let unmountTimer: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
 
-    let mounted = true;
-    preloadHomeData().then((loaded) => {
-      if (!mounted) return;
+    const windowLoaded = new Promise<void>((resolve) => {
+      if (document.readyState === 'complete') {
+        resolve();
+      } else {
+        window.addEventListener('load', () => resolve(), { once: true });
+      }
+    });
+
+    const fontsLoaded = (document.fonts ? document.fonts.ready : Promise.resolve()) as Promise<any>;
+    const minDelay = new Promise<void>((resolve) => setTimeout(resolve, MIN_SPLASH_MS));
+    const dataPromise = cachedHomeData ? Promise.resolve(cachedHomeData) : preloadHomeData();
+
+    Promise.all([windowLoaded, fontsLoaded, minDelay, dataPromise]).then(([_, __, ___, loaded]) => {
+      if (!isMounted) return;
       if (loaded) {
         setData(loaded);
       }
-      setIsFadingOut(true);
-      setTimeout(() => {
-        if (mounted) setIsLoading(false);
-      }, 250);
+      setSplashFading(true);
+      unmountTimer = setTimeout(() => {
+        if (isMounted) setShowSplash(false);
+      }, 400);
     });
 
     return () => {
-      mounted = false;
+      isMounted = false;
+      if (unmountTimer) clearTimeout(unmountTimer);
     };
   }, []);
 
@@ -370,18 +382,15 @@ export default function Home({ typeFilter }: HomeProps = {}) {
 
   return (
     <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-full max-w-[100vw]">
-      {isLoading && (
+      {/* Splash Screen Loading with MiyoroLoader on /home */}
+      {showSplash && (
         <div 
-          className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-250 ease-out ${isFadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+          className={`fixed inset-0 z-[9999] bg-black text-white flex items-center justify-center transition-opacity duration-400 ease-out pointer-events-auto ${
+            splashFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+          aria-hidden={splashFading}
         >
-          <div className="flex flex-col items-center gap-4">
-            <h1 className="text-[#d4d4d4] text-5xl md:text-7xl font-black lowercase tracking-tight drop-shadow-md animate-pulse">
-              miyoro
-            </h1>
-            <div className="w-32 md:w-40 h-1 bg-white/10 rounded-full overflow-hidden mt-1 relative">
-              <div className="absolute top-0 left-0 h-full w-1/3 bg-[#d4d4d4] rounded-full" style={{ animation: 'loading-bar 1.5s infinite ease-in-out' }}></div>
-            </div>
-          </div>
+          <MiyoroLoader size={120} />
         </div>
       )}
 

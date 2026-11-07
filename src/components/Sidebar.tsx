@@ -181,7 +181,11 @@ export default function Sidebar() {
             {/* 80px Icon Wrapper so logo is precisely centered in collapsed rail */}
             <div className="w-[80px] h-12 flex items-center justify-center shrink-0">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white/90 group-hover/logo:text-white transition-all duration-200 group-hover/logo:scale-110">
-                <MiyoroSparkLogo className="w-6 h-6 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.4)]" />
+                <img
+                  src="/miyoro-logo-white.svg"
+                  alt="Miyoro"
+                  className="w-7 h-7 object-contain drop-shadow-[0_0_8px_rgba(255,255,255,0.35)]"
+                />
               </div>
             </div>
 

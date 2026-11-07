@@ -79,7 +79,6 @@ const CinematicPosterWall = ({ posters }: { posters: any[] }) => {
 export default function Landing() {
   const navigate = useNavigate();
   const [wallPosters, setWallPosters] = useState<any[]>([]);
-  const [showSplash, setShowSplash] = useState(true);
 
   const { currentUser, signInWithGoogle } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -87,9 +86,6 @@ export default function Landing() {
 
   useEffect(() => {
     let mounted = true;
-    const fallbackTimer = setTimeout(() => {
-      if (mounted) setShowSplash(false);
-    }, 850);
 
     const loadLandingData = async () => {
       try {
@@ -115,27 +111,22 @@ export default function Landing() {
           setWallPosters(uniquePosters);
         }
 
-        // Preload first 16 wall poster image bytes into browser cache before lifting splash
+        // Preload first 16 wall poster image bytes into browser cache
         const posterUrls = uniquePosters.slice(0, 16).map(p =>
           p.poster_path.startsWith('http') ? p.poster_path : `${IMAGE_BASE_URL_W500}${p.poster_path}`
         );
         await preloadImageUrls(posterUrls, 550);
-        if (mounted) {
-          setShowSplash(false);
-        }
 
         // Warm up the entire Home screen metadata & visual assets in the background!
         preloadHomeData().catch(() => {});
       } catch (err) {
         console.error("Error loading landing data:", err);
-        if (mounted) setShowSplash(false);
       }
     };
     loadLandingData();
 
     return () => {
       mounted = false;
-      clearTimeout(fallbackTimer);
     };
   }, []);
 
@@ -160,21 +151,6 @@ export default function Landing() {
 
   return (
     <div className="h-screen bg-black font-sans w-[100vw] overflow-hidden relative selection:bg-white/30">
-      
-      {/* Fast Intro Splash */}
-      <div 
-        className={`fixed inset-0 z-[200] bg-black flex items-center justify-center transition-opacity duration-700 ease-in-out ${!showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-      >
-        <div className="flex flex-col items-center gap-4">
-          <h1 className="text-[#d4d4d4] text-5xl md:text-7xl font-black lowercase tracking-tight drop-shadow-md animate-pulse">
-            miyoro
-          </h1>
-          <div className="w-32 md:w-40 h-1 bg-white/10 rounded-full overflow-hidden mt-1 relative">
-            <div className="absolute top-0 left-0 h-full w-1/3 bg-[#d4d4d4] rounded-full" style={{ animation: 'loading-bar 1.5s infinite ease-in-out' }}></div>
-          </div>
-        </div>
-      </div>
-
       {/* Hero Section */}
       <section className="relative w-full h-full flex items-center">
         {/* Background Wall */}
