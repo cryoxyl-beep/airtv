@@ -382,7 +382,7 @@ export default function WatchPage({
       )}
 
       {/* Left-Side Cinematic Information Stack */}
-      <div className="absolute inset-0 z-30 flex flex-col justify-center px-6 pt-20 pb-10 md:px-14 lg:px-20 w-full pointer-events-none">
+      <div className="absolute inset-0 z-30 flex flex-col justify-center px-6 pt-20 pb-10 md:pl-[124px] md:pr-14 lg:pl-[136px] lg:pr-20 w-full pointer-events-none">
         <div className="flex flex-col items-start justify-center gap-3 md:gap-3.5 max-w-[480px] lg:max-w-[520px] w-full pointer-events-none">
           {/* 2A. HD Clear Logo (or Plain Text Fallback ONLY when logo is unavailable) */}
           <div className="mb-1 md:mb-2 min-h-[44px] flex items-center">

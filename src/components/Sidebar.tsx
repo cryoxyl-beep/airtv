@@ -18,6 +18,14 @@ export default function Sidebar() {
   const isHidden = location.pathname === '/' || location.pathname.startsWith('/play/');
   if (isHidden) return null;
 
+  // Detect Movie, TV Series, and Anime watch pages for Transparent Immersive Mode
+  const isWatchPage =
+    location.pathname.startsWith('/watch/') ||
+    (location.pathname.startsWith('/anime/') && !location.pathname.includes('/play/'));
+
+  // Navigation icon size: slightly larger (26px) on watch pages, standard (24px) elsewhere
+  const navIconSize = isWatchPage ? 26 : 24;
+
   // Strictly the 5 requested navigation entries (Home, Search, TV, Anime, Movies):
   const navItems = [
     {
@@ -99,11 +107,16 @@ export default function Sidebar() {
       <div
         aria-hidden="true"
         className={`hidden md:block fixed top-0 left-0 bottom-0 w-[420px] z-[115] pointer-events-none select-none transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[opacity] ${
-          isExpanded ? 'opacity-100' : 'opacity-0'
+          isExpanded
+            ? 'opacity-100'
+            : isWatchPage
+            ? 'opacity-25'
+            : 'opacity-0'
         }`}
         style={{
-          background:
-            'linear-gradient(90deg, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.92) 22%, rgba(0,0,0,0.82) 38%, rgba(0,0,0,0.58) 56%, rgba(0,0,0,0.28) 74%, rgba(0,0,0,0.08) 88%, rgba(0,0,0,0) 100%)',
+          background: isWatchPage
+            ? 'linear-gradient(90deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.78) 22%, rgba(0,0,0,0.62) 38%, rgba(0,0,0,0.38) 56%, rgba(0,0,0,0.16) 74%, rgba(0,0,0,0.04) 88%, rgba(0,0,0,0) 100%)'
+            : 'linear-gradient(90deg, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.92) 22%, rgba(0,0,0,0.82) 38%, rgba(0,0,0,0.58) 56%, rgba(0,0,0,0.28) 74%, rgba(0,0,0,0.08) 88%, rgba(0,0,0,0) 100%)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           maskImage:
@@ -115,7 +128,7 @@ export default function Sidebar() {
 
       {/* ==================================================================== */}
       {/* LAYER A & C: INTERACTIVE NAVIGATION RAIL + STATIONARY NAV CONTENT    */}
-      {/* Collapsed: 88px dedicated left gutter -> Expanded: 235px surface     */}
+      {/* Collapsed: 88px rail -> Expanded: 235px surface                      */}
       {/* Synchronized cubic-bezier(0.22,1,0.36,1) 300ms transition            */}
       {/* ==================================================================== */}
       <aside
@@ -137,7 +150,8 @@ export default function Sidebar() {
             <img
               src="/miyoro-logo-white.svg"
               alt="Miyoro"
-              className="w-7 h-7 object-contain"
+              style={{ width: navIconSize, height: navIconSize }}
+              className="object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]"
               draggable={false}
             />
           </button>
@@ -165,21 +179,25 @@ export default function Sidebar() {
                   className={`group/item w-full h-11 flex items-center cursor-pointer text-left focus:outline-none transition-colors duration-200 ${
                     item.isActive
                       ? 'text-white font-semibold'
+                      : isWatchPage
+                      ? 'text-white/75 hover:text-white font-medium'
                       : 'text-white/55 hover:text-white font-medium'
                   }`}
                   aria-label={item.label}
                 >
-                  {/* Fixed 88px Rail Slot containing a 40px (w-10 h-10) Icon Container */}
+                  {/* Fixed 88px Rail Slot containing a 44px (w-11 h-11) Icon Container */}
                   {/* Guarantees zero horizontal or vertical icon shift during expansion */}
                   <div className="w-[88px] h-11 flex items-center justify-center shrink-0">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200 ${
+                      className={`w-11 h-11 rounded-full flex items-center justify-center transition-colors duration-200 ${
                         item.isActive
                           ? 'text-white'
+                          : isWatchPage
+                          ? 'text-white/75 group-hover/item:text-white drop-shadow-[0_2px_6px_rgba(0,0,0,0.75)]'
                           : 'text-white/60 group-hover/item:text-white'
                       }`}
                     >
-                      <Icon size={24} active={item.isActive} />
+                      <Icon size={navIconSize} active={item.isActive} />
                     </div>
                   </div>
 
@@ -195,7 +213,7 @@ export default function Sidebar() {
                       className={`text-[15px] leading-none tracking-[0.01em] whitespace-nowrap ${
                         item.isActive
                           ? 'text-white font-semibold'
-                          : 'text-white/65 group-hover/item:text-white font-medium'
+                          : 'text-white/70 group-hover/item:text-white font-medium'
                       }`}
                     >
                       {item.label}

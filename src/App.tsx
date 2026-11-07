@@ -34,11 +34,20 @@ function ScrollManager() {
 function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isImmersive = location.pathname === '/' || location.pathname.startsWith('/play/');
+  const isWatchRoute =
+    location.pathname.startsWith('/watch/') ||
+    (location.pathname.startsWith('/anime/') && !location.pathname.includes('/play/'));
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative">
       <Sidebar />
-      <div className={`flex-1 min-w-0 ${!isImmersive ? 'md:pl-[88px] pb-16 md:pb-0' : 'p-0'}`}>
+      <div
+        className={`flex-1 min-w-0 ${
+          !isImmersive
+            ? `${isWatchRoute ? 'md:pl-0' : 'md:pl-[88px]'} pb-16 md:pb-0`
+            : 'p-0'
+        }`}
+      >
         {children}
       </div>
     </div>
