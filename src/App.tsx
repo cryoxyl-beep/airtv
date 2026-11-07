@@ -36,9 +36,9 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   const isImmersive = location.pathname === '/' || location.pathname.startsWith('/play/');
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
+    <div className="min-h-screen bg-black text-white flex flex-col relative">
       <Sidebar />
-      <div className={`flex-1 transition-all duration-300 ${!isImmersive ? 'md:pl-[80px] pb-16 md:pb-0' : 'p-0'}`}>
+      <div className={`flex-1 min-w-0 ${!isImmersive ? 'md:pl-[88px] pb-16 md:pb-0' : 'p-0'}`}>
         {children}
       </div>
     </div>
