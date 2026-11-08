@@ -350,7 +350,7 @@ export default function WatchPage({ type }: WatchPageProps) {
         <WatchPageContent
           item={data ? { ...data, logo_path: resolvedLogoUrl || data.logo_path } : null}
           type={type}
-          seasonNumber={type === 'tv' ? resolvedSeason : 1}
+          seasonNumber={type === 'tv' ? resolvedSeason : (data?.tmdb_season || 1)}
           episodeNumber={type === 'tv' || type === 'anime' ? resolvedEpisode : 1}
           seasonData={type === 'tv' || type === 'anime' ? seasonData : undefined}
           hasProgress={hasProgress}

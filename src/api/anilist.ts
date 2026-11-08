@@ -11,7 +11,7 @@ const MEDIA_FIELDS = `
   id
   title { romaji english native }
   description
-  coverImage { extraLarge large }
+  coverImage { extraLarge large color }
   bannerImage
   averageScore
   startDate { year month day }

@@ -112,7 +112,7 @@ export default function Navbar() {
 
   return (
     <header 
-      className="relative w-full z-[100] bg-black px-4 sm:px-8 lg:px-[56px] pt-4 sm:pt-5 pb-2 flex items-center justify-between select-none"
+      className="relative w-full z-[100] bg-transparent px-4 sm:px-8 lg:px-[56px] pt-4 sm:pt-5 pb-2 flex items-center justify-between select-none"
     >
       {/* LEFT: Miyoro Logo (Visible on mobile where sidebar is bottom navigation) */}
       <div className="flex md:hidden items-center z-10 shrink-0">

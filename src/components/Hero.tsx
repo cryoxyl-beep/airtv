@@ -3,6 +3,14 @@ import { Play, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { IMAGE_BASE_URL, fetchTrailer, resolveLogo, getCachedLogo, preloadLogosForItems } from '../api/tmdb';
 import HeroSkeleton from './HeroSkeleton';
+import {
+  AmbientColor,
+  DEFAULT_AMBIENT_COLOR,
+  getHeroAmbientCacheKey,
+  getCachedAmbientColor,
+  extractHeroAmbientColor,
+  buildAmbientBackgroundStyle,
+} from '../utils/ambientColor';
 
 interface HeroProps {
   items: any[];
@@ -13,13 +21,62 @@ export default function Hero({ items }: HeroProps) {
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(() => (items && items[0] ? getCachedLogo(items[0]) : null));
+  const [ambientColors, setAmbientColors] = useState<Record<string, AmbientColor>>(() => {
+    const initial: Record<string, AmbientColor> = {};
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        const cached = getCachedAmbientColor(item);
+        if (cached) {
+          initial[getHeroAmbientCacheKey(item)] = cached;
+        }
+      }
+    }
+    return initial;
+  });
   const navigate = useNavigate();
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (items && items.length > 0) {
-      preloadLogosForItems(items);
+    if (!items || items.length === 0) return;
+    preloadLogosForItems(items);
+
+    let isMounted = true;
+
+    // Immediately populate any already-cached ambient colors
+    setAmbientColors((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const item of items) {
+        const key = getHeroAmbientCacheKey(item);
+        const cached = getCachedAmbientColor(item);
+        if (cached && !next[key]) {
+          next[key] = cached;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+
+    // Prepare ambient colors for all hero entries from their static artwork
+    const orderedIndices = items.map((_, i) => (activeIndex + i) % items.length);
+    for (const idx of orderedIndices) {
+      const item = items[idx];
+      if (!item) continue;
+      const key = getHeroAmbientCacheKey(item);
+      if (getCachedAmbientColor(item)) continue;
+
+      extractHeroAmbientColor(item).then((extracted) => {
+        if (!isMounted) return;
+        setAmbientColors((prev) => {
+          if (prev[key] === extracted) return prev;
+          return { ...prev, [key]: extracted };
+        });
+      });
     }
+
+    return () => {
+      isMounted = false;
+    };
   }, [items]);
 
   useEffect(() => {
@@ -245,10 +302,52 @@ export default function Hero({ items }: HeroProps) {
     }
   };
 
+  const activeAmbientColor =
+    ambientColors[getHeroAmbientCacheKey(activeItem)] ||
+    getCachedAmbientColor(activeItem) ||
+    DEFAULT_AMBIENT_COLOR;
+
   return (
-    <section className="w-full px-4 sm:px-8 lg:px-[56px] pt-4 sm:pt-6 md:pt-[28px] select-none">
+    <section className="relative w-full px-4 sm:px-8 lg:px-[56px] pt-4 sm:pt-6 md:pt-[28px] select-none">
+      {/* Dedicated Dynamic Ambient Backlighting Layer (Behind Hero, Sidebar & Top Viewport) */}
+      <div
+        className="pointer-events-none select-none absolute -top-16 -left-[120px] -right-8 -bottom-32 z-0"
+        aria-hidden="true"
+      >
+        {items.map((item, idx) => {
+          const isActive = idx === activeIndex;
+          const key = getHeroAmbientCacheKey(item);
+          const itemColor =
+            ambientColors[key] || getCachedAmbientColor(item) || DEFAULT_AMBIENT_COLOR;
+          return (
+            <div
+              key={`ambient-${key}-${idx}`}
+              className={`absolute inset-0 transition-opacity duration-1000 ease-in-out will-change-opacity ${
+                isActive ? 'opacity-100' : 'opacity-0'
+              }`}
+              style={{
+                background: buildAmbientBackgroundStyle(itemColor),
+              }}
+            />
+          );
+        })}
+        {/* Smooth Vertical Fade-to-Black Mask so the ambient glow dissolves naturally into Miyoro's black background */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to bottom, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0) 26%, rgba(0,0,0,0.26) 56%, rgba(0,0,0,0.76) 82%, #000000 100%)',
+          }}
+        />
+      </div>
+
       {/* Inset Rounded Hero Container */}
-      <div className="relative w-full h-[70vh] sm:h-[76vh] md:h-[80vh] min-h-[520px] md:min-h-[600px] max-h-[840px] rounded-[18px] sm:rounded-[22px] md:rounded-[24px] overflow-hidden bg-[#0a0a0a] border border-white/10 shadow-[0_20px_60px_rgba(0,0,0,0.85)] isolate [transform:translateZ(0)] flex flex-col justify-end p-6 sm:p-10 md:p-12 lg:p-14">
+      <div
+        className="relative z-10 w-full h-[70vh] sm:h-[76vh] md:h-[80vh] min-h-[520px] md:min-h-[600px] max-h-[840px] rounded-[18px] sm:rounded-[22px] md:rounded-[24px] overflow-hidden bg-[#0a0a0a] border border-white/10 transition-shadow duration-1000 ease-in-out isolate [transform:translateZ(0)] flex flex-col justify-end p-6 sm:p-10 md:p-12 lg:p-14"
+        style={{
+          boxShadow: `0 20px 60px rgba(0, 0, 0, 0.85), 0 -10px 72px -12px rgba(${activeAmbientColor.cssRgb}, 0.34), 0 0 110px -20px rgba(${activeAmbientColor.cssRgb}, 0.22)`,
+        }}
+      >
         
         {/* Layer 0: YouTube Player (Strictly clipped inside rounded hero container) */}
         <div className="absolute inset-0 w-full h-full z-0 pointer-events-none overflow-hidden rounded-[inherit] bg-black">

@@ -115,8 +115,8 @@ export default function Sidebar() {
         }`}
         style={{
           background: isWatchPage
-            ? 'linear-gradient(90deg, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.78) 22%, rgba(0,0,0,0.62) 38%, rgba(0,0,0,0.38) 56%, rgba(0,0,0,0.16) 74%, rgba(0,0,0,0.04) 88%, rgba(0,0,0,0) 100%)'
-            : 'linear-gradient(90deg, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.92) 22%, rgba(0,0,0,0.82) 38%, rgba(0,0,0,0.58) 56%, rgba(0,0,0,0.28) 74%, rgba(0,0,0,0.08) 88%, rgba(0,0,0,0) 100%)',
+            ? 'linear-gradient(90deg, rgba(0,0,0,0.32) 0%, rgba(0,0,0,0.22) 22%, rgba(0,0,0,0.14) 38%, rgba(0,0,0,0.06) 56%, rgba(0,0,0,0.02) 74%, rgba(0,0,0,0) 100%)'
+            : 'linear-gradient(90deg, rgba(0,0,0,0.24) 0%, rgba(0,0,0,0.16) 22%, rgba(0,0,0,0.10) 38%, rgba(0,0,0,0.04) 56%, rgba(0,0,0,0.01) 74%, rgba(0,0,0,0) 100%)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           maskImage:

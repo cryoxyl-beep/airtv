@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { IMAGE_BASE_URL, resolveLogo, getCachedLogo } from '../api/tmdb';
 import { Play, X } from 'lucide-react';
 import { SkeletonEpisodeList } from './MiyoroSkeletons';
+import { getAnimeNameAndSeason } from '../api/animeRelations';
 
 interface MoreEpisodesPopoverProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ export default function MoreEpisodesPopover({
   onEpisodeSelect,
 }: MoreEpisodesPopoverProps) {
   const [logo, setLogo] = useState<string | null>(() => propLogoUrl || (item ? getCachedLogo(item) : null));
+  const animeInfo = type === 'anime' ? getAnimeNameAndSeason(item, selectedSeason) : null;
   const episodeListRef = useRef<HTMLDivElement>(null);
   const seasonListRef = useRef<HTMLDivElement>(null);
   const activeEpisodeRef = useRef<HTMLButtonElement | null>(null);
@@ -148,19 +150,33 @@ export default function MoreEpisodesPopover({
       >
         {/* Header: HD Clear Logo primarily (or text fallback), with close button */}
         <div className="flex items-center justify-between px-6 py-4 md:px-8 md:py-5 border-b border-white/[0.08] shrink-0 bg-[#121214]/90 backdrop-blur-md">
-          <div className="flex items-center min-w-0 pr-4 h-11 md:h-13">
+          <div className="flex items-center min-w-0 pr-4">
             {logo ? (
-              <img
-                src={logo}
-                alt={title}
-                className="max-h-11 md:max-h-13 w-auto max-w-[260px] md:max-w-[340px] object-contain object-left drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)] select-none"
-                draggable={false}
-                onError={() => setLogo(null)}
-              />
+              <div className="flex flex-col items-start min-w-0">
+                <img
+                  src={logo}
+                  alt={title}
+                  className="max-h-10 md:max-h-12 w-auto max-w-[240px] md:max-w-[320px] object-contain object-left drop-shadow-[0_4px_12px_rgba(0,0,0,0.85)] select-none"
+                  draggable={false}
+                  onError={() => setLogo(null)}
+                />
+                {type === 'anime' && animeInfo?.season && (
+                  <span className="text-xs font-semibold text-white/70 mt-0.5 tracking-wide">
+                    {animeInfo.season}
+                  </span>
+                )}
+              </div>
             ) : (
-              <h2 className="text-xl md:text-2xl font-black tracking-tight text-white truncate drop-shadow-md">
-                {title}
-              </h2>
+              <div className="flex flex-col items-start min-w-0">
+                <h2 className="text-xl md:text-2xl font-black tracking-tight text-white truncate drop-shadow-md">
+                  {title}
+                </h2>
+                {type === 'anime' && animeInfo?.season && (
+                  <span className="text-xs font-semibold text-white/60 tracking-wide">
+                    {animeInfo.season}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

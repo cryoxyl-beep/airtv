@@ -29,6 +29,7 @@ import {
   IMAGE_BASE_URL_W500
 } from '../api/tmdb';
 import { dedupeItems } from '../utils/dedupe';
+import { preloadHeroAmbientColors } from '../utils/ambientColor';
 
 // Cache objects to prevent repeated loading / refetching ("not loading every time")
 let cachedInitialBatch: any = null;
@@ -117,12 +118,12 @@ export const preloadHomeData = async (): Promise<any> => {
         ...(newlyAddedAnimeData.results || [])
       ]).filter((a: any) => !(a.title && a.title.toLowerCase().includes('polar opposite')));
 
-      const selectedAnime = animePool.slice(0, 3);
+      const selectedAnime = animePool.slice(0, 2);
       const tvPool = (trendingData.results || []).filter((i: any) => i.media_type === 'tv' && i.id);
       const moviePool = (trendingData.results || []).filter((i: any) => i.media_type === 'movie' && i.id);
 
-      const selectedTv = tvPool.slice(0, 3);
-      const selectedMovie = moviePool.slice(0, 4);
+      const selectedTv = tvPool.slice(0, 2);
+      const selectedMovie = moviePool.slice(0, 2);
 
       const combinedHeroItems = [...selectedAnime, ...selectedTv, ...selectedMovie];
 
@@ -162,11 +163,14 @@ export const preloadHomeData = async (): Promise<any> => {
         topRated
       };
 
-      // Resolve clear logos for top visible items first
-      const priorityItems = detailedHeroItems.slice(0, 4);
+      // Resolve clear logos and ambient colors for hero entries first
+      const priorityItems = detailedHeroItems.slice(0, 6);
       await Promise.race([
-        preloadLogosForItems(priorityItems),
-        new Promise(r => setTimeout(r, 400))
+        Promise.all([
+          preloadLogosForItems(priorityItems),
+          preloadHeroAmbientColors(detailedHeroItems),
+        ]),
+        new Promise(r => setTimeout(r, 450))
       ]);
 
       // Preload critical image bytes into browser GPU cache
@@ -507,7 +511,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
   }, [homeReady, loadError]);
 
   return (
-    <div className="min-h-screen bg-black pb-20 font-sans overflow-x-hidden w-full max-w-[100vw]">
+    <div className="min-h-screen bg-transparent pb-20 font-sans w-full">
       {/* 1. Full-screen LogoReveal Overlay on /home */}
       {showOverlay && (
         <div 

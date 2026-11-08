@@ -5,6 +5,7 @@ import {
   getVideoMutedPreference,
   setVideoMutedPreference,
 } from '../utils/preferences';
+import { getAnimeNameAndSeason } from '../api/animeRelations';
 
 interface WatchPageProps {
   item: any;
@@ -72,6 +73,8 @@ export default function WatchPage({
   const [logoUrl, setLogoUrl] = useState<string | null>(
     () => getCachedLogo(item) || item?.logo_path || null
   );
+
+  const animeInfo = type === 'anime' ? getAnimeNameAndSeason(item, seasonNumber) : null;
 
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [trailerPlaying, setTrailerPlaying] = useState(false);
@@ -373,10 +376,10 @@ export default function WatchPage({
         <div className="absolute top-6 right-6 z-50 pointer-events-auto">
           <button
             onClick={toggleMute}
-            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-[#1A1A1A]/80 border border-white/10 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.3),_0_4px_10px_rgba(0,0,0,0.4)] backdrop-blur-md flex items-center justify-center hover:bg-[#252525]/90 transition-all group"
+            className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-black/60 hover:bg-black/80 border border-white/15 text-white shadow-lg backdrop-blur-md flex items-center justify-center transition-all cursor-pointer group"
             aria-label={isMuted ? 'Unmute' : 'Mute'}
           >
-            {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+            {isMuted ? <VolumeX className="w-5 h-5 text-white" /> : <Volume2 className="w-5 h-5 text-white" />}
           </button>
         </div>
       )}
@@ -385,7 +388,7 @@ export default function WatchPage({
       <div className="absolute inset-0 z-30 flex flex-col justify-center px-6 pt-20 pb-10 md:pl-[124px] md:pr-14 lg:pl-[136px] lg:pr-20 w-full pointer-events-none">
         <div className="flex flex-col items-start justify-center gap-3 md:gap-3.5 max-w-[480px] lg:max-w-[520px] w-full pointer-events-none">
           {/* 2A. HD Clear Logo (or Plain Text Fallback ONLY when logo is unavailable) */}
-          <div className="mb-1 md:mb-2 min-h-[44px] flex items-center">
+          <div className="mb-1 md:mb-2 min-h-[44px] flex flex-col items-start gap-1.5 md:gap-2">
             {logoUrl ? (
               <img
                 src={logoUrl}
@@ -399,6 +402,15 @@ export default function WatchPage({
               <h1 className="text-3xl md:text-5xl lg:text-6xl font-extrabold tracking-tight text-white drop-shadow-xl text-left">
                 {typeof item?.title === 'string' ? item.title : item?.title?.english || item?.title?.romaji || item?.name || 'Overview'}
               </h1>
+            )}
+
+            {/* Anime Identity: Season clearly mentioned under the logo */}
+            {type === 'anime' && animeInfo?.season && (
+              <div className="pt-0.5">
+                <span className="px-2.5 py-0.5 rounded-full bg-white/15 border border-white/20 text-xs sm:text-sm font-semibold text-white tracking-wide shadow-sm backdrop-blur-md">
+                  {animeInfo.season}
+                </span>
+              </div>
             )}
           </div>
 

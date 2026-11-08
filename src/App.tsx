@@ -39,7 +39,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     (location.pathname.startsWith('/anime/') && !location.pathname.includes('/play/'));
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col relative">
+    <div className="min-h-screen bg-black text-white flex flex-col relative overflow-x-hidden">
       <Sidebar />
       <div
         className={`flex-1 min-w-0 ${
