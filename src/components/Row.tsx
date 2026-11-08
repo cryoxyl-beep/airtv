@@ -3,6 +3,7 @@ import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo, fetchDetails } from '../api/tmdb';
 import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { dedupeItems } from '../utils/dedupe';
+import RatingRing from './MiyoroRatingRing';
 
 interface RowProps {
   title: string;
@@ -169,6 +170,8 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
           decoding="async"
           draggable={false}
         />
+
+        <RatingRing value={item.vote_average ?? item.rating ?? (item.averageScore ? item.averageScore / 10 : null)} corner="top-right" className="z-30" />
 
         {/* Logo Overlay with subtle bottom gradient for readability (omitted on portrait Top 10 posters where artwork has embedded title) */}
         {!isTop10 && (

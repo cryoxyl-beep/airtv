@@ -2,38 +2,27 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search,
-  LayoutGrid,
-  Clapperboard,
-  Tv,
-  Compass,
-  Clock,
   X,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { searchMovies, searchTV, fetchTrending, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { searchAnime, fetchTrendingAnime } from '../api/anilist';
 import { SkeletonGrid } from '../components/MiyoroSkeletons';
 import EmptyState from '../components/MiyoroEmptyStates';
 import { LoadingButton } from '../components/MiyoroSpinner';
+import RatingRing from '../components/MiyoroRatingRing';
+import {
+  MoviesIcon,
+  TvIcon,
+  AnimeIcon
+} from '../components/MiyoroIcons';
 
-type FilterType = 'all' | 'movies' | 'series' | 'anime';
-
-interface RecentSearchItem {
-  id: string;
-  text: string;
-}
-
-const DEFAULT_RECENT_SEARCHES: string[] = [
-  'Jujutsu Kaisen',
-  'Attack on Titan',
-  'Spy x Family',
-  'Bleach',
-];
+type ActiveFilter = 'movies' | 'series' | 'anime' | '';
 
 export default function SearchPage() {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
-  const filter = (searchParams.get('filter') as FilterType) || 'all';
+  const filterParam = searchParams.get('filter');
+  const filter: ActiveFilter = (filterParam === 'movies' || filterParam === 'series' || filterParam === 'anime') ? filterParam : '';
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,59 +48,6 @@ export default function SearchPage() {
     };
   }, []);
 
-  // Recent searches stored in localStorage
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const stored = localStorage.getItem('recent_searches_v2');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-    return DEFAULT_RECENT_SEARCHES;
-  });
-
-  const saveRecentSearch = (term: string) => {
-    const trimmed = term.trim();
-    if (!trimmed) return;
-    setRecentSearches((prev) => {
-      const filtered = prev.filter((item) => item.toLowerCase() !== trimmed.toLowerCase());
-      const updated = [trimmed, ...filtered].slice(0, 10);
-      try {
-        localStorage.setItem('recent_searches_v2', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-  };
-
-  const handleRemoveRecent = (termToRemove: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setRecentSearches((prev) => {
-      const updated = prev.filter((item) => item !== termToRemove);
-      try {
-        localStorage.setItem('recent_searches_v2', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-  };
-
-  const handleClearRecent = () => {
-    setRecentSearches([]);
-    try {
-      localStorage.removeItem('recent_searches_v2');
-    } catch (e) {}
-  };
-
-  const handleRecentClick = (term: string) => {
-    setInputVal(term);
-    saveRecentSearch(term);
-    navigate(`/search?q=${encodeURIComponent(term)}&filter=${filter}`);
-  };
-
   // Keyboard shortcut listener: press '/' to focus search bar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -133,7 +69,7 @@ export default function SearchPage() {
     setInputVal(query);
   }, [query]);
 
-  // Load Trending in India when no search query
+  // Load default fallback items ("Maybe these ?") when no search query
   useEffect(() => {
     let mounted = true;
     const loadTrending = async () => {
@@ -158,7 +94,7 @@ export default function SearchPage() {
         }
         setTrendingItems(combined);
       } catch (e) {
-        console.error('Failed to load trending items:', e);
+        console.error('Failed to load items:', e);
       } finally {
         if (mounted) setLoadingTrending(false);
       }
@@ -175,6 +111,7 @@ export default function SearchPage() {
     const fetchResults = async () => {
       if (!query.trim()) {
         setResults([]);
+        setLoading(false);
         return;
       }
       setLoading(true);
@@ -224,9 +161,27 @@ export default function SearchPage() {
     fetchResults();
   }, [query, filter]);
 
+  // Debounced input change for instant search with skeleton feedback
+  useEffect(() => {
+    if (inputVal === query) return;
+
+    if (!inputVal.trim()) {
+      navigate(`/search?q=${filter ? `&filter=${filter}` : ''}`, { replace: true });
+      return;
+    }
+
+    setLoading(true);
+    const timer = setTimeout(() => {
+      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}${filter ? `&filter=${filter}` : ''}`, { replace: true });
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [inputVal, query, filter, navigate]);
+
   const handleRetrySearch = async () => {
     setIsRetryingSearch(true);
     setSearchError(false);
+    setLoading(true);
     try {
       if (filter === 'movies') {
         const data = await searchMovies(query);
@@ -260,24 +215,25 @@ export default function SearchPage() {
       setSearchError(true);
     } finally {
       setIsRetryingSearch(false);
+      setLoading(false);
     }
   };
 
-  const handleFilterClick = (newFilter: FilterType) => {
-    navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${newFilter}`);
+  const handleFilterClick = (clickedFilter: 'movies' | 'series' | 'anime') => {
+    const nextFilter = filter === clickedFilter ? '' : clickedFilter;
+    setLoading(true);
+    const queryPart = inputVal.trim() ? `q=${encodeURIComponent(inputVal.trim())}` : 'q=';
+    const filterPart = nextFilter ? `&filter=${nextFilter}` : '';
+    navigate(`/search?${queryPart}${filterPart}`);
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (inputVal.trim()) {
-      saveRecentSearch(inputVal);
-      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${filter}`);
+      setLoading(true);
+      const filterPart = filter ? `&filter=${filter}` : '';
+      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}${filterPart}`);
     }
-  };
-
-  const handleDiscoverClick = () => {
-    // Shuffle trending items for exciting discovery
-    setTrendingItems((prev) => [...prev].sort(() => Math.random() - 0.5));
   };
 
   const handleCardClick = (item: any) => {
@@ -293,7 +249,7 @@ export default function SearchPage() {
     }
   };
 
-  // Helper to extract poster, title, rating, year, and type for each portrait card
+  // Helper to extract poster, title, rating for each portrait card
   const getCardDetails = (item: any) => {
     const posterUrl = item.poster_path
       ? item.poster_path.startsWith('http')
@@ -328,27 +284,12 @@ export default function SearchPage() {
 
     const rating = rawRating > 0 ? rawRating : null;
 
-    const releaseYear = item.first_air_date
-      ? new Date(item.first_air_date).getFullYear()
-      : item.release_date
-      ? new Date(item.release_date).getFullYear()
-      : item.startDate?.year || item.anilist_raw?.seasonYear || null;
-
-    let mediaTypeLabel = 'Movie';
-    if (item.source === 'anilist' || item.media_type === 'anime') {
-      mediaTypeLabel = 'Anime';
-    } else if (item.media_type === 'tv' || item.first_air_date) {
-      mediaTypeLabel = 'TV Show';
-    } else if (item.media_type === 'movie' || item.release_date) {
-      mediaTypeLabel = 'Movie';
-    }
-
-    return { posterUrl, backupUrl, title, rating, releaseYear, mediaTypeLabel };
+    return { posterUrl, backupUrl, title, rating };
   };
 
   // Filter trending items when no search query is active
   const filteredTrending = trendingItems.filter((item) => {
-    if (filter === 'all') return true;
+    if (!filter) return true;
     if (filter === 'anime') return item.source === 'anilist' || item.media_type === 'anime';
     if (filter === 'movies')
       return (
@@ -367,37 +308,33 @@ export default function SearchPage() {
   const activeList = isSearching ? results : filteredTrending;
   const isLoading = isSearching ? loading : loadingTrending;
 
-  const FILTER_TABS = [
-    { id: 'all', label: 'All', icon: LayoutGrid },
-    { id: 'movies', label: 'Movies', icon: Clapperboard },
-    { id: 'series', label: 'TV Shows', icon: Tv },
-    { id: 'anime', label: 'Anime', icon: Compass },
+  const FILTER_TABS: { id: 'movies' | 'series' | 'anime'; label: string; icon: React.ComponentType<any> }[] = [
+    { id: 'movies', label: 'Movies', icon: MoviesIcon },
+    { id: 'series', label: 'TV Shows', icon: TvIcon },
+    { id: 'anime', label: 'Anime', icon: AnimeIcon },
   ];
 
   return (
     <div className="min-h-screen bg-black pt-6 sm:pt-10 px-4 sm:px-8 lg:px-12 pb-24 font-sans text-white select-none">
       <div className="max-w-[1450px] mx-auto space-y-6 sm:space-y-7">
-        {/* 1. Large Search Input (Image 2 style with shortcut badge, NO back button) */}
+        {/* 1. Sleek Search Bar UI */}
         <form onSubmit={handleSearchSubmit} className="relative w-full">
-          <div className="relative flex items-center h-13 sm:h-14 px-4 sm:px-5 bg-[#0e0f12] border border-white/10 focus-within:border-white/25 rounded-xl shadow-xl transition-all duration-200">
-            <Search className="w-5 h-5 text-white/40 shrink-0 mr-3.5" />
+          <div className="relative flex items-center h-14 sm:h-15 px-5 bg-[#121318]/90 backdrop-blur-xl border border-white/12 focus-within:border-white/30 focus-within:ring-2 focus-within:ring-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 group">
+            <Search className="w-5 h-5 text-white/45 group-focus-within:text-white transition-colors shrink-0 mr-3.5" />
             <input
               ref={inputRef}
               type="text"
               value={inputVal}
               onChange={(e) => {
                 setInputVal(e.target.value);
-                if (!e.target.value) {
-                  navigate(`/search?q=&filter=${filter}`);
-                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   handleSearchSubmit(e);
                 }
               }}
-              placeholder="Find the perfect rom-com..."
-              className="w-full bg-transparent text-sm sm:text-base text-white placeholder:text-white/40 outline-none"
+              placeholder="Search movies, TV shows, anime..."
+              className="w-full bg-transparent text-base sm:text-lg text-white placeholder:text-white/35 outline-none font-medium tracking-wide"
               autoFocus
             />
             {inputVal ? (
@@ -405,101 +342,53 @@ export default function SearchPage() {
                 type="button"
                 onClick={() => {
                   setInputVal('');
-                  navigate(`/search?q=&filter=${filter}`);
+                  navigate(`/search?q=${filter ? `&filter=${filter}` : ''}`);
                   inputRef.current?.focus();
                 }}
-                className="p-1 rounded-full hover:bg-white/10 text-white/40 hover:text-white transition-colors cursor-pointer"
+                className="p-1.5 rounded-full hover:bg-white/15 text-white/50 hover:text-white transition-all cursor-pointer active:scale-90"
                 aria-label="Clear Search"
               >
                 <X className="w-4 h-4" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-flex items-center justify-center w-6 h-6 text-xs text-white/40 font-mono bg-white/5 border border-white/10 rounded">
+              <kbd className="hidden sm:inline-flex items-center justify-center w-7 h-7 text-xs text-white/40 font-mono bg-white/5 border border-white/10 rounded-md shadow-inner select-none">
                 /
               </kbd>
             )}
           </div>
         </form>
 
-        {/* 2. Filter Pills Bar (Image 2 style with icons & dark rounded-lg states) */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+        {/* 2. Filter Pills Bar (No "All" button, none selected by default) */}
+        <div className="flex flex-wrap items-center gap-2.5">
           {FILTER_TABS.map((tab) => {
             const Icon = tab.icon;
-            const isActive = filter === tab.id || (!filter && tab.id === 'all');
+            const isActive = filter === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => handleFilterClick(tab.id as FilterType)}
-                className={`flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-all cursor-pointer ${
+                onClick={() => handleFilterClick(tab.id)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer active:scale-95 ${
                   isActive
-                    ? 'bg-[#1C1D22] border border-white/20 text-white shadow-sm'
-                    : 'text-white/60 hover:text-white hover:bg-white/5 border border-transparent'
+                    ? 'bg-[#1C1D24] border border-white/25 text-white shadow-md'
+                    : 'text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70" />
+                <Icon size={18} active={isActive} className="shrink-0" />
                 <span>{tab.label}</span>
               </button>
             );
           })}
         </div>
 
-        {/* 3. RECENT SEARCHES (Image 2 style with chips, clock icon, close button, and Clear all) */}
-        {recentSearches.length > 0 && (
-          <div className="space-y-3 pt-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-white/40 tracking-wider uppercase">
-                Recent Searches
-              </span>
-              <button
-                type="button"
-                onClick={handleClearRecent}
-                className="text-xs text-white/40 hover:text-white transition-colors cursor-pointer"
-              >
-                Clear all
-              </button>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-              {recentSearches.map((term) => (
-                <div
-                  key={term}
-                  onClick={() => handleRecentClick(term)}
-                  className="group flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#131418] border border-white/10 hover:border-white/25 text-white/80 hover:text-white text-xs sm:text-sm transition-all cursor-pointer"
-                >
-                  <Clock className="w-3.5 h-3.5 text-white/40 group-hover:text-white/70" />
-                  <span>{term}</span>
-                  <button
-                    type="button"
-                    onClick={(e) => handleRemoveRecent(term, e)}
-                    className="text-white/40 hover:text-white p-0.5 ml-0.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
-                    aria-label={`Remove ${term}`}
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 4. Section Header: Trending in India / Search Results */}
-        <div className="flex items-center justify-between pt-3">
+        {/* 3. Section Header: "Maybe these ?" / Search Results */}
+        <div className="flex items-center justify-between pt-2">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
-            {isSearching ? `Showing results for "${query}"` : 'Trending in India'}
+            {isSearching ? `Showing results for "${query}"` : 'Maybe these ?'}
           </h2>
-          {!isSearching && (
-            <button
-              type="button"
-              onClick={handleDiscoverClick}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#18191E] hover:bg-[#22242B] border border-white/10 text-xs sm:text-sm font-semibold text-white/90 transition-all cursor-pointer"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-white/70" />
-              <span>Discover</span>
-            </button>
-          )}
         </div>
 
-        {/* 5. Content Grid / Skeletons / Empty States */}
+        {/* 4. Content Grid / Skeletons / Empty States */}
         {!isOnline ? (
           <div className="py-16 flex justify-center">
             <EmptyState variant="offline" />
@@ -530,32 +419,32 @@ export default function SearchPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 sm:gap-5">
             {activeList.map((item, index) => {
-              const { posterUrl, backupUrl, title, rating, releaseYear, mediaTypeLabel } =
-                getCardDetails(item);
+              const { posterUrl, backupUrl, title, rating } = getCardDetails(item);
 
               return (
                 <div
                   key={(item.id || item.mal_id || index) + '-' + index}
                   onClick={() => handleCardClick(item)}
-                  className="group cursor-pointer flex flex-col"
+                  className="relative z-10 flex-shrink-0 cursor-pointer flex flex-col group transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:z-50 hover:scale-105"
                 >
-                  {/* Portrait Poster Container (aspect-[2/3], rounded-xl, hover scale) */}
-                  <div className="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-[#161619] border border-white/10 shadow-md group-hover:border-white/25 group-hover:shadow-[0_12px_30px_rgba(0,0,0,0.85)] transition-all duration-300">
+                  {/* Portrait Poster Container with Homepage Poster Hover Animation & Glow */}
+                  <div className="relative rounded-xl overflow-hidden bg-[#141414] border border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.5),0_0_20px_rgba(255,255,255,0.06)] group-hover:border-white/20 group-hover:shadow-[0_8px_30px_rgb(0,0,0,0.8),0_0_25px_rgba(255,255,255,0.15)] transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] z-20 aspect-[2/3] w-full">
                     <img
                       src={posterUrl}
                       alt={title}
                       loading={index < 7 ? 'eager' : 'lazy'}
                       decoding="async"
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-105"
                       onError={(e) => {
                         if (backupUrl && (e.currentTarget as HTMLImageElement).src !== backupUrl) {
                           (e.currentTarget as HTMLImageElement).src = backupUrl;
                         }
                       }}
                     />
+                    <RatingRing value={rating} corner="top-right" className="z-30" />
                   </div>
 
-                  {/* Metadata underneath the portrait card (matching Image 2) */}
+                  {/* Clean Title Only underneath poster */}
                   <div className="pt-2.5 px-0.5">
                     <h3
                       className="text-sm font-bold text-white truncate group-hover:text-white transition-colors"
@@ -563,23 +452,6 @@ export default function SearchPage() {
                     >
                       {title}
                     </h3>
-                    <div className="flex items-center gap-1.5 text-xs text-white/50 pt-0.5">
-                      {rating && (
-                        <>
-                          <span className="text-white/90 font-medium flex items-center gap-1">
-                            <span className="text-white">★</span> {rating.toFixed(1)}
-                          </span>
-                          <span>·</span>
-                        </>
-                      )}
-                      {releaseYear && (
-                        <>
-                          <span>{releaseYear}</span>
-                          <span>·</span>
-                        </>
-                      )}
-                      <span>{mediaTypeLabel}</span>
-                    </div>
                   </div>
                 </div>
               );

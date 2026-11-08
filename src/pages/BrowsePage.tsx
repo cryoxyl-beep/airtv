@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { fetchByProvider, fetchTVByProvider, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { RowCard } from '../components/Row';
+import RatingRing from '../components/MiyoroRatingRing';
 import { ArrowLeft } from 'lucide-react';
 
 import { logos } from '../assets/logos';
@@ -174,6 +175,7 @@ function GridCard({ item }: { item: any }) {
           loading="lazy"
           draggable={false}
         />
+        <RatingRing value={item.vote_average ?? item.rating ?? (item.averageScore ? item.averageScore / 10 : null)} corner="top-right" className="z-30" />
         <div className="absolute inset-x-0 bottom-0 h-full bg-gradient-to-t from-black/90 via-black/20 to-transparent flex flex-col justify-end items-center p-4 pointer-events-none z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
            <h3 className="text-white font-bold text-sm drop-shadow-md text-center">
              {item.title || item.name}
