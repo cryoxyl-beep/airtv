@@ -267,7 +267,7 @@ export const getCachedLogo = (item: any): string | null => {
   if (!info) return null;
 
   if (memoryLogoCache.has(info.cacheKey)) {
-    return memoryLogoCache.get(info.cacheKey)!;
+    return memoryLogoCache.get(info.cacheKey) ?? null;
   }
 
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -281,6 +281,8 @@ export const getCachedLogo = (item: any): string | null => {
             memoryLogoCache.set(info.cacheKey, normalized);
             return normalized;
           }
+          memoryLogoCache.set(info.cacheKey, null);
+          return null;
         }
       }
     } catch (e) {
@@ -360,10 +362,13 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
   if (!info) return null;
   const { cacheKey, type, id } = info;
 
-  const inMemory = memoryLogoCache.get(cacheKey);
-  if (typeof inMemory === 'string' && inMemory.length > 0) {
-    preloadImageUrl(inMemory);
-    return inMemory;
+  if (memoryLogoCache.has(cacheKey)) {
+    const inMemory = memoryLogoCache.get(cacheKey);
+    if (typeof inMemory === 'string' && inMemory.length > 0) {
+      preloadImageUrl(inMemory);
+      return inMemory;
+    }
+    return null;
   }
 
   if (inFlightLogos.has(cacheKey)) {
@@ -463,6 +468,8 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
           // ignore
         }
       }
+    } else {
+      memoryLogoCache.set(cacheKey, null);
     }
 
     return finalUrl;

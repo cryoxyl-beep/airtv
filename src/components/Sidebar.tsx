@@ -7,6 +7,7 @@ import {
   AnimeIcon,
   MoviesIcon,
 } from './MiyoroIcons';
+import { preloadHomeData, markHomeRevealShown } from '../pages/Home';
 
 export default function Sidebar() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -72,6 +73,8 @@ export default function Sidebar() {
       window.clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
     }
+    // Also warm home data whenever the user expands the sidebar
+    preloadHomeData().catch(() => {});
     setIsExpanded(true);
   };
 
@@ -84,11 +87,24 @@ export default function Sidebar() {
     }, 50);
   };
 
+  const handleItemHover = (path: string) => {
+    if (path === '/home') {
+      preloadHomeData().catch(() => {});
+    }
+  };
+
   const handleNavClick = (path: string) => {
     if (leaveTimerRef.current !== null) {
       window.clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
     }
+    // Dismiss any active search input focus to eliminate keyboard dismissal delay
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    // Never show logo reveal overlay on in-app route transitions
+    markHomeRevealShown();
+
     if (path === '/home' && (location.pathname === '/home' || location.pathname === '/')) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
@@ -144,6 +160,7 @@ export default function Sidebar() {
           <button
             type="button"
             onClick={() => handleNavClick('/home')}
+            onMouseEnter={() => handleItemHover('/home')}
             className="w-10 h-10 rounded-xl flex items-center justify-center text-white/95 hover:text-white transition-opacity duration-200 cursor-pointer focus:outline-none"
             aria-label="Miyoro Home"
           >
@@ -176,6 +193,7 @@ export default function Sidebar() {
                 <button
                   type="button"
                   onClick={() => handleNavClick(item.path)}
+                  onMouseEnter={() => handleItemHover(item.path)}
                   className={`group/item w-full h-11 flex items-center cursor-pointer text-left focus:outline-none transition-colors duration-200 ${
                     item.isActive
                       ? 'text-white font-semibold'
@@ -244,6 +262,7 @@ export default function Sidebar() {
               key={`mob-${item.id}`}
               type="button"
               onClick={() => handleNavClick(item.path)}
+              onTouchStart={() => handleItemHover(item.path)}
               className={`flex flex-col items-center justify-center gap-1 py-1 px-2 rounded-lg transition-colors cursor-pointer focus:outline-none ${
                 item.isActive ? 'text-white font-semibold' : 'text-white/50 hover:text-white'
               }`}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Landing from './pages/Landing';
-import Home from './pages/Home';
+import Home, { preloadHomeData, markHomeRevealShown } from './pages/Home';
 import WatchPage from './pages/WatchPage';
 import PlayerPage from './pages/PlayerPage';
 import BrowsePage from './pages/BrowsePage';
@@ -31,12 +31,47 @@ function ScrollManager() {
   return null;
 }
 
+const HOME_ROUTE_FILTERS: Record<
+  string,
+  'shows' | 'movies' | 'anime' | 'sports' | 'sparks' | 'categories' | undefined
+> = {
+  '/home': undefined,
+  '/shows': 'shows',
+  '/anime': 'anime',
+  '/movies': 'movies',
+  '/sports': 'sports',
+  '/sparks': 'sparks',
+  '/categories': 'categories',
+};
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const isImmersive = location.pathname === '/' || location.pathname.startsWith('/play/');
   const isWatchRoute =
     location.pathname.startsWith('/watch/') ||
     (location.pathname.startsWith('/anime/') && !location.pathname.includes('/play/'));
+
+  const isHomeScreen = Object.prototype.hasOwnProperty.call(HOME_ROUTE_FILTERS, location.pathname);
+  const activeTypeFilter = isHomeScreen ? HOME_ROUTE_FILTERS[location.pathname] : undefined;
+
+  // Keep last selected home filter stable when hidden on other routes
+  const lastFilterRef = React.useRef(activeTypeFilter);
+  if (isHomeScreen) {
+    lastFilterRef.current = activeTypeFilter;
+  }
+
+  // If user starts on a non-home internal route (like /search), mark reveal shown synchronously before mount
+  if (location.pathname !== '/' && location.pathname !== '/home') {
+    markHomeRevealShown();
+  }
+
+  const [mountHome, setMountHome] = React.useState(() => location.pathname !== '/');
+
+  React.useEffect(() => {
+    if (location.pathname !== '/' && !mountHome) {
+      setMountHome(true);
+    }
+  }, [location.pathname, mountHome]);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-x-hidden">
@@ -48,7 +83,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
             : 'p-0'
         }`}
       >
-        {children}
+        {!isHomeScreen && children}
+        {mountHome && (
+          <Home typeFilter={lastFilterRef.current} isActive={isHomeScreen} />
+        )}
       </div>
     </div>
   );
@@ -60,6 +98,11 @@ function NotFoundRoute() {
 }
 
 export default function App() {
+  React.useEffect(() => {
+    // Eagerly preheat Home screen data in background as soon as app boots
+    preloadHomeData().catch(() => {});
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -68,13 +111,13 @@ export default function App() {
         <AppLayout>
           <Routes>
             <Route path="/" element={<Landing />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/shows" element={<Home typeFilter="shows" />} />
-            <Route path="/anime" element={<Home typeFilter="anime" />} />
-            <Route path="/movies" element={<Home typeFilter="movies" />} />
-            <Route path="/sports" element={<Home typeFilter="sports" />} />
-            <Route path="/sparks" element={<Home typeFilter="sparks" />} />
-            <Route path="/categories" element={<Home typeFilter="categories" />} />
+            <Route path="/home" element={null} />
+            <Route path="/shows" element={null} />
+            <Route path="/anime" element={null} />
+            <Route path="/movies" element={null} />
+            <Route path="/sports" element={null} />
+            <Route path="/sparks" element={null} />
+            <Route path="/categories" element={null} />
             <Route path="/myspace" element={<MySpace />} />
             <Route path="/watch/movie/:id" element={<WatchPage type="movie" />} />
             <Route path="/watch/tv/:id" element={<WatchPage type="tv" />} />

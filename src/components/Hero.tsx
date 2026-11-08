@@ -14,9 +14,10 @@ import {
 
 interface HeroProps {
   items: any[];
+  isActive?: boolean;
 }
 
-export default function Hero({ items }: HeroProps) {
+export default function Hero({ items, isActive = true }: HeroProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
@@ -95,12 +96,12 @@ export default function Hero({ items }: HeroProps) {
   }, []);
 
   useEffect(() => {
-    if (!items || items.length === 0) return;
+    if (!isActive || !items || items.length === 0) return;
     const timer = setInterval(() => {
       setActiveIndex((current) => (current + 1) % items.length);
     }, 30000);
     return () => clearInterval(timer);
-  }, [items, activeIndex]);
+  }, [items, activeIndex, isActive]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -118,6 +119,18 @@ export default function Hero({ items }: HeroProps) {
     
     if (!activeItem) return;
 
+    resolveLogo(activeItem).then(url => {
+      if (isCurrent && url) {
+        setLogoUrl(url);
+      }
+    });
+
+    if (!isActive) {
+      return () => {
+        isCurrent = false;
+      };
+    }
+
     const fetchT = activeItem.source === 'anilist' 
       ? Promise.resolve(activeItem.trailer)
       : fetchTrailer(activeItem.id, activeItem.media_type || (activeItem.first_air_date ? 'tv' : 'movie'));
@@ -125,12 +138,6 @@ export default function Hero({ items }: HeroProps) {
     fetchT.then(key => {
       if (isCurrent && key) {
         setTrailerKey(key);
-      }
-    });
-      
-    resolveLogo(activeItem).then(url => {
-      if (isCurrent && url) {
-        setLogoUrl(url);
       }
     });
 
@@ -161,7 +168,7 @@ export default function Hero({ items }: HeroProps) {
         iframeRef.current.src = 'about:blank';
       }
     };
-  }, [activeIndex, items]);
+  }, [activeIndex, items, isActive]);
 
   useEffect(() => {
     if (!trailerKey) return;

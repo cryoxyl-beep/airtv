@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useLayoutEffect, useMemo } from 'react';
-import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { IMAGE_BASE_URL_W500, resolveLogo, getCachedLogo, fetchDetails } from '../api/tmdb';
 import { buildAnimeEpisodeList } from '../api/animeResolver';
 import { dedupeItems } from '../utils/dedupe';
@@ -46,12 +46,14 @@ const unobserveElement = (element: Element) => {
   getGlobalObserver()?.unobserve(element);
 };
 
-export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = ({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
+const rowScrollPositions = new Map<string, number>();
+
+export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; isGridCard?: boolean; hideTitleWithLogo?: boolean }> = React.memo(({ item, isTop10 = false, index, isGridCard = false, hideTitleWithLogo = false }) => {
   const initialLogo = isTop10 ? null : getCachedLogo(item);
   const [logo, setLogo] = useState<string | null>(initialLogo);
   const [loadingLogo, setLoadingLogo] = useState(!initialLogo && !isTop10);
   const cardRef = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(index < 8);
+  const [isVisible, setIsVisible] = useState(index < 6);
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -166,7 +168,7 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
           src={currentImg}
           alt={item.title || item.name}
           className="w-full h-full object-cover transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] group-hover:scale-105 group-hover:brightness-105"
-          loading={index < 6 ? "eager" : "lazy"}
+          loading={index < 4 ? "eager" : "lazy"}
           decoding="async"
           draggable={false}
         />
@@ -206,52 +208,51 @@ export const RowCard: React.FC<{ item: any; isTop10?: boolean; index: number; is
       </div>
     </div>
   );
-};
+});
 
-export default function Row({ title, items, isTop10 = false }: RowProps) {
+const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [renderAll, setRenderAll] = useState(isTop10);
 
-  const location = useLocation();
-  const navigationType = useNavigationType();
-
-  // Restore horizontal scroll
-  useLayoutEffect(() => {
-    if (navigationType === 'POP' && rowRef.current && items.length > 0) {
-      const savedX = sessionStorage.getItem(`scroll-x-${location.key}-${title}`);
-      if (savedX) {
-        const x = parseInt(savedX, 10);
-        if (rowRef.current) { rowRef.current.scrollLeft = x; }
-      }
-    }
-  }, [location.key, navigationType, title, items.length]);
-
-  // Save horizontal scroll
   useEffect(() => {
-    let timeoutId: any;
+    if (renderAll) return;
+    const timer = setTimeout(() => {
+      setRenderAll(true);
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [renderAll]);
+
+  // Restore horizontal scroll from fast in-memory map
+  useLayoutEffect(() => {
+    const savedX = rowScrollPositions.get(title);
+    if (savedX && rowRef.current && items.length > 0) {
+      rowRef.current.scrollLeft = savedX;
+    }
+  }, [title, items.length]);
+
+  // Save horizontal scroll to fast in-memory map
+  useEffect(() => {
     const handleScroll = () => {
-      if (timeoutId) return;
-      timeoutId = setTimeout(() => {
-        if (rowRef.current) {
-           sessionStorage.setItem(`scroll-x-${location.key}-${title}`, rowRef.current.scrollLeft.toString());
-        }
-        timeoutId = null;
-      }, 200);
+      if (!renderAll) setRenderAll(true);
+      if (rowRef.current) {
+        rowScrollPositions.set(title, rowRef.current.scrollLeft);
+      }
     };
-    
+
     const node = rowRef.current;
     if (node) {
-       node.addEventListener('scroll', handleScroll, { passive: true });
+      node.addEventListener('scroll', handleScroll, { passive: true });
     }
     return () => {
-       if (node) node.removeEventListener('scroll', handleScroll);
-       if (timeoutId) clearTimeout(timeoutId);
+      if (node) node.removeEventListener('scroll', handleScroll);
     };
-  }, [location, title]);
+  }, [title, renderAll]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (!renderAll) setRenderAll(true);
     setIsDragging(true);
     setStartX(e.pageX - (rowRef.current?.offsetLeft || 0));
     setScrollLeft(rowRef.current?.scrollLeft || 0);
@@ -276,11 +277,24 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
   };
 
   const uniqueItems = useMemo(() => {
-    return dedupeItems(items || []);
-  }, [items]);
+    const deduped = dedupeItems(items || []);
+    return deduped.filter((item) =>
+      isTop10 ? Boolean(item.poster_path || item.backdrop_path) : Boolean(item.backdrop_path)
+    );
+  }, [items, isTop10]);
+
+  const displayedItems = renderAll ? uniqueItems : uniqueItems.slice(0, 8);
 
   return (
-    <div className="relative group/row">
+    <div
+      className="relative group/row"
+      onMouseEnter={() => {
+        if (!renderAll) setRenderAll(true);
+      }}
+      onTouchStart={() => {
+        if (!renderAll) setRenderAll(true);
+      }}
+    >
       <div className="flex items-center justify-between pl-12 pr-12 mb-2">
         <h2 className="text-2xl font-bold text-white tracking-wide">{title}</h2>
       </div>
@@ -295,7 +309,7 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
       >
         <div className={`${isTop10 ? 'w-4' : 'w-8'} shrink-0`} />
         
-        {uniqueItems.length === 0 ? (
+        {displayedItems.length === 0 ? (
           [...Array(6)].map((_, index) => (
             <div key={`skeleton-${index}`} className={`relative z-10 flex-shrink-0 flex items-center ${isTop10 ? 'gap-0' : 'w-[300px] md:w-[400px] lg:w-[450px]'}`}>
               {isTop10 && (
@@ -309,14 +323,15 @@ export default function Row({ title, items, isTop10 = false }: RowProps) {
             </div>
           ))
         ) : (
-          uniqueItems.map((item, index) => {
-            if (isTop10 ? (!item.poster_path && !item.backdrop_path) : !item.backdrop_path) return null;
-            return <RowCard key={`${item.id}-${item.tmdb_id || index}`} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />;
-          })
+          displayedItems.map((item, index) => (
+            <RowCard key={`${item.id}-${item.tmdb_id || index}`} item={item} isTop10={isTop10} index={index} hideTitleWithLogo={true} />
+          ))
         )}
 
         <div className={`${isTop10 ? 'w-4' : 'w-8'} shrink-0`} />
       </div>
     </div>
   );
-}
+});
+
+export default Row;

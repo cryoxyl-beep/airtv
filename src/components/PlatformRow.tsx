@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect, useLayoutEffect } from 'react';
-import { useNavigate, useLocation, useNavigationType } from 'react-router-dom';
+import React, { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { logos } from '../assets/logos';
 
@@ -13,49 +13,13 @@ const platforms = [
   { id: 531, slug: 'paramount', name: 'Paramount+', logo: logos.paramount },
 ];
 
-export default function PlatformRow() {
+const PlatformRow = React.memo(function PlatformRow() {
   const rowRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
 
-  const location = useLocation();
-  const navigationType = useNavigationType();
   const navigate = useNavigate();
-
-  // Restore horizontal scroll
-  useLayoutEffect(() => {
-    if (navigationType === 'POP' && rowRef.current) {
-      const savedX = sessionStorage.getItem(`scroll-x-${location.key}-platforms`);
-      if (savedX) {
-        const x = parseInt(savedX, 10);
-        if (rowRef.current) { rowRef.current.scrollLeft = x; }
-      }
-    }
-  }, [location.key, navigationType]);
-
-  // Save horizontal scroll
-  useEffect(() => {
-    let timeoutId: any;
-    const handleScroll = () => {
-      if (timeoutId) return;
-      timeoutId = setTimeout(() => {
-        if (rowRef.current) {
-           sessionStorage.setItem(`scroll-x-${location.key}-platforms`, rowRef.current.scrollLeft.toString());
-        }
-        timeoutId = null;
-      }, 200);
-    };
-    
-    const node = rowRef.current;
-    if (node) {
-       node.addEventListener('scroll', handleScroll, { passive: true });
-    }
-    return () => {
-       if (node) node.removeEventListener('scroll', handleScroll);
-       if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [location]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -117,4 +81,6 @@ export default function PlatformRow() {
       </div>
     </div>
   );
-}
+});
+
+export default PlatformRow;

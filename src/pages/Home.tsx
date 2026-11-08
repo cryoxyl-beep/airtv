@@ -34,6 +34,7 @@ import { preloadHeroAmbientColors } from '../utils/ambientColor';
 // Cache objects to prevent repeated loading / refetching ("not loading every time")
 let cachedInitialBatch: any = null;
 let initialBatchPromise: Promise<any> | null = null;
+let remainingRailsPreloaded = false;
 const railCache: Record<string, any[]> = {};
 const tmdbGenreCache: Record<number, Promise<any>> = {};
 const tmdbTVGenreCache: Record<number, Promise<any>> = {};
@@ -163,17 +164,16 @@ export const preloadHomeData = async (): Promise<any> => {
         topRated
       };
 
-      // Resolve clear logos and ambient colors for hero entries first
-      const priorityItems = detailedHeroItems.slice(0, 6);
-      await Promise.race([
-        Promise.all([
-          preloadLogosForItems(priorityItems),
-          preloadHeroAmbientColors(detailedHeroItems),
-        ]),
-        new Promise(r => setTimeout(r, 450))
-      ]);
+      // Cache immediately so Home renders without delay
+      cachedInitialBatch = initialData;
 
-      // Preload critical image bytes into browser GPU cache
+      // In the background, warm logos, ambient colors, and GPU image cache without blocking initial render
+      const priorityItems = detailedHeroItems.slice(0, 6);
+      Promise.all([
+        preloadLogosForItems(priorityItems),
+        preloadHeroAmbientColors(detailedHeroItems),
+      ]).catch(() => {});
+
       const criticalImageUrls: (string | null | undefined)[] = [];
       const firstHero = detailedHeroItems[0];
       if (firstHero) {
@@ -204,9 +204,8 @@ export const preloadHomeData = async (): Promise<any> => {
         criticalImageUrls.push(getCachedLogo(card));
       }
 
-      await preloadImageUrls(criticalImageUrls, 600);
+      preloadImageUrls(criticalImageUrls, 600).catch(() => {});
 
-      cachedInitialBatch = initialData;
       return initialData;
     } catch (err) {
       console.error("Failed to load initial Home data", err);
@@ -219,18 +218,19 @@ export const preloadHomeData = async (): Promise<any> => {
   return initialBatchPromise;
 };
 
-// Lazy loaded individual rail: renders real Row if cached/loaded, otherwise skeleton
+// Lazy loaded individual rail: renders real Row if cached/loaded and near viewport, otherwise lightweight placeholder / skeleton
 interface LazyRailProps {
   title: string;
   railKey: string;
   isTop10?: boolean;
+  eager?: boolean;
   loadItems: () => Promise<any[]>;
   initialItems?: any[];
 }
 
 const railPromises: Record<string, Promise<any[]>> = {};
 
-function LazyRail({ title, railKey, isTop10 = false, loadItems, initialItems }: LazyRailProps) {
+const LazyRail = React.memo(function LazyRail({ title, railKey, isTop10 = false, eager = false, loadItems, initialItems }: LazyRailProps) {
   const [items, setItems] = useState<any[] | null>(() => {
     if (initialItems && initialItems.length > 0) {
       railCache[railKey] = initialItems;
@@ -239,8 +239,11 @@ function LazyRail({ title, railKey, isTop10 = false, loadItems, initialItems }: 
     return railCache[railKey] || null;
   });
 
+  const [isNearViewport, setIsNearViewport] = useState<boolean>(eager);
   const containerRef = useRef<HTMLDivElement>(null);
   const isFetchingRef = useRef(false);
+  const loadItemsRef = useRef(loadItems);
+  loadItemsRef.current = loadItems;
 
   useEffect(() => {
     if (initialItems && initialItems.length > 0 && (!items || items.length === 0)) {
@@ -258,7 +261,7 @@ function LazyRail({ title, railKey, isTop10 = false, loadItems, initialItems }: 
     isFetchingRef.current = true;
 
     if (!railPromises[railKey]) {
-      railPromises[railKey] = loadItems()
+      railPromises[railKey] = loadItemsRef.current()
         .then((res) => {
           railCache[railKey] = res || [];
           return res || [];
@@ -273,33 +276,41 @@ function LazyRail({ title, railKey, isTop10 = false, loadItems, initialItems }: 
       setItems(res);
       isFetchingRef.current = false;
     });
-  }, [railKey, loadItems]);
+  }, [railKey]);
 
   useEffect(() => {
-    if (items && items.length > 0) return;
-    if (railCache[railKey] && railCache[railKey].length > 0) {
+    if (isNearViewport && items && items.length > 0) return;
+    if (isNearViewport && railCache[railKey] && railCache[railKey].length > 0) {
       setItems(railCache[railKey]);
       return;
     }
 
     const node = containerRef.current;
-    if (!node) return;
+    if (!node) {
+      if (isNearViewport) triggerLoad();
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
+          setIsNearViewport(true);
           triggerLoad();
           observer.disconnect();
         }
       },
-      { rootMargin: '1000px' }
+      { rootMargin: '600px 0px' }
     );
 
     observer.observe(node);
     return () => {
       observer.disconnect();
     };
-  }, [railKey, triggerLoad, items]);
+  }, [railKey, triggerLoad, items, isNearViewport]);
+
+  if (!isNearViewport) {
+    return <div ref={containerRef} className="w-full min-h-[250px]" aria-hidden="true" />;
+  }
 
   if (items && items.length > 0) {
     return <Row title={title} items={items} isTop10={isTop10} />;
@@ -321,16 +332,25 @@ function LazyRail({ title, railKey, isTop10 = false, loadItems, initialItems }: 
       )}
     </div>
   );
-}
+});
 
-let hasShownHomeReveal = false;
+let hasShownHomeReveal = typeof window !== 'undefined' && sessionStorage.getItem('miyoro_has_shown_reveal') === 'true';
+
+export const markHomeRevealShown = () => {
+  hasShownHomeReveal = true;
+  try {
+    sessionStorage.setItem('miyoro_has_shown_reveal', 'true');
+  } catch (e) {}
+};
 
 interface HomeProps {
   typeFilter?: 'shows' | 'movies' | 'anime' | 'sports' | 'sparks' | 'categories';
+  isActive?: boolean;
 }
 
-export default function Home({ typeFilter }: HomeProps = {}) {
-  const isHomeVisit = !typeFilter || window.location.pathname === '/home';
+export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
+  // Only ever show LogoReveal on initial cold landing directly on /home if never seen in session
+  const isHomeVisit = isActive && (!typeFilter || window.location.pathname === '/home');
   const shouldReveal = isHomeVisit && !hasShownHomeReveal;
 
   const [showOverlay, setShowOverlay] = useState(shouldReveal);
@@ -351,11 +371,11 @@ export default function Home({ typeFilter }: HomeProps = {}) {
 
   const handleRevealDone = () => {
     if (homeReadyRef.current) {
-      hasShownHomeReveal = true;
+      markHomeRevealShown();
       setOverlayFading(true);
       setTimeout(() => {
         setShowOverlay(false);
-      }, 300);
+      }, 250);
     } else {
       setRevealRound((r) => r + 1);
     }
@@ -365,12 +385,12 @@ export default function Home({ typeFilter }: HomeProps = {}) {
     if (!showOverlay) return;
 
     const safetyTimer = setTimeout(() => {
-      hasShownHomeReveal = true;
+      markHomeRevealShown();
       setShowOverlay(false);
       if (!homeReadyRef.current) {
         setLoadError(true);
       }
-    }, 15000);
+    }, 3000);
 
     return () => clearTimeout(safetyTimer);
   }, [showOverlay]);
@@ -461,7 +481,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
 
   // Gentle background preloader: after initial fold loads, sequentially warm remaining rails
   useEffect(() => {
-    if (!homeReady || loadError) return;
+    if (!homeReady || loadError || remainingRailsPreloaded) return;
 
     const remainingLoaders = [
       () => Promise.all([getTmdbGenre(28), getAnilistGenre('Action')]).then(([t, a]) => { railCache['action'] = mix(t.results, a.results); }),
@@ -495,7 +515,10 @@ export default function Home({ typeFilter }: HomeProps = {}) {
     let step = 0;
 
     const runNext = () => {
-      if (step >= remainingLoaders.length) return;
+      if (step >= remainingLoaders.length) {
+        remainingRailsPreloaded = true;
+        return;
+      }
       const loader = remainingLoaders[step];
       step++;
       loader().catch(() => {}).finally(() => {
@@ -511,9 +534,9 @@ export default function Home({ typeFilter }: HomeProps = {}) {
   }, [homeReady, loadError]);
 
   return (
-    <div className="min-h-screen bg-transparent pb-20 font-sans w-full">
+    <div className={`min-h-screen bg-transparent pb-20 font-sans w-full ${isActive ? 'block' : 'hidden'}`}>
       {/* 1. Full-screen LogoReveal Overlay on /home */}
-      {showOverlay && (
+      {isActive && showOverlay && (
         <div 
           className={`fixed inset-0 z-[9999] bg-black text-white flex items-center justify-center transition-opacity duration-300 ease-out pointer-events-auto ${
             overlayFading ? 'opacity-0 pointer-events-none' : 'opacity-100'
@@ -551,7 +574,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
               <HeroSkeleton height="70vh" />
             </section>
           ) : (
-            <Hero items={heroItems} />
+            <Hero items={heroItems} isActive={isActive} />
           )}
 
           {/* Content Feed with Continuous, Spaced Categories */}
@@ -561,6 +584,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
               title="Trending Now"
               railKey="top10"
               isTop10={true}
+              eager={true}
               initialItems={initialData.top10}
               loadItems={async () => {
                 const [t, a] = await Promise.all([safeFetch(fetchTop10), safeFetch(() => fetchTrendingAnime(15))]);
@@ -576,6 +600,7 @@ export default function Home({ typeFilter }: HomeProps = {}) {
             <LazyRail
               title="Suggested For You"
               railKey="trending"
+              eager={true}
               initialItems={initialData.trending?.slice(4)}
               loadItems={async () => {
                 const t = await safeFetch(fetchTrending);

@@ -44,23 +44,9 @@ export const preloadFribbMapping = async () => {
   
   initPromise = (async () => {
     try {
-      // 1. Check local storage cache first to save download time
-      const cacheKey = 'fribb_mapping_v1';
-      const cached = typeof window !== 'undefined' && window.localStorage ? localStorage.getItem(cacheKey) : null;
-      
-      let data;
-      if (cached) {
-        data = JSON.parse(cached);
-      } else {
-        const response = await fetch('https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json');
-        if (!response.ok) throw new Error('Failed to fetch Fribb mapping');
-        data = await response.json();
-        try {
-          if (typeof window !== 'undefined' && window.localStorage) localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch (e) {
-          // ignore quota errors
-        }
-      }
+      const response = await fetch('https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-mini.json');
+      if (!response.ok) throw new Error('Failed to fetch Fribb mapping');
+      const data = await response.json();
       
       for (const item of data) {
         if (item.anilist_id) {
