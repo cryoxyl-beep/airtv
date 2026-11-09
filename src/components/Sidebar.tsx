@@ -105,7 +105,7 @@ export default function Sidebar() {
     // Never show logo reveal overlay on in-app route transitions
     markHomeRevealShown();
 
-    if (path === '/home' && (location.pathname === '/home' || location.pathname === '/')) {
+    if (path === location.pathname || (path === '/home' && location.pathname === '/')) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       navigate(path);

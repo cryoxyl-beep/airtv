@@ -13,11 +13,14 @@ import {
   fetchNewlyAddedAnime,
   fetchAnimeByGenre,
   fetchAnimeByTag,
-  fetchTopRatedAnime
+  fetchTopRatedAnime,
+  fetchTop100Anime
 } from '../api/anilist';
 import {
   fetchTrending,
   fetchTop10,
+  fetchMovieTop10,
+  fetchTopRatedTV,
   fetchDetails,
   fetchByGenre,
   fetchTVByGenre,
@@ -90,7 +93,7 @@ const mix = (tmdb: any[], anilist: any[]) => {
   return dedupeItems(merged);
 };
 
-// Initial lightweight critical batch: Hero items, Trending Now (top10), Suggested (trending), Masterpieces (topRated)
+// Initial lightweight critical batch: Hero items, Trending Now (top10), Suggested, Masterpieces for Home, TV, Movies, and Anime
 export const preloadHomeData = async (): Promise<any> => {
   if (cachedInitialBatch) return cachedInitialBatch;
   if (initialBatchPromise) return initialBatchPromise;
@@ -100,110 +103,178 @@ export const preloadHomeData = async (): Promise<any> => {
       const [
         trendingData,
         top10Data,
+        movieTop10Data,
         topRatedMoviesData,
+        topRatedTVData,
         trendingAnimeData,
         newlyAddedAnimeData,
-        topRatedAnimeData
+        topRatedAnimeData,
+        top100AnimeData
       ] = await Promise.all([
         safeFetch(() => fetchTrending()),
         safeFetch(() => fetchTop10()),
+        safeFetch(() => fetchMovieTop10()),
         safeFetch(() => fetchAllTimeFavorites()),
+        safeFetch(() => fetchTopRatedTV()),
         safeFetch(() => fetchTrendingAnime(15)),
         safeFetch(() => fetchNewlyAddedAnime(15)),
-        safeFetch(() => fetchTopRatedAnime(15))
+        safeFetch(() => fetchTopRatedAnime(35)),
+        safeFetch(() => fetchTop100Anime(30))
       ]);
 
-      // Assemble Hero with deduplicated anime
+      // 1. Anime Pool
       const animePool = dedupeItems([
         ...(trendingAnimeData.results || []),
         ...(newlyAddedAnimeData.results || [])
       ]).filter((a: any) => !(a.title && a.title.toLowerCase().includes('polar opposite')));
+      const animeHeroPool = animePool.slice(0, 6);
 
+      // 2. TV Pool
+      const filteredTvTop10 = (top10Data.results || []).filter((item: any) => {
+        const title = item.title || item.name || '';
+        return title !== 'Tagesschau' && title !== 'Paradise Hotel';
+      });
+      const tvTrending = (trendingData.results || []).filter((i: any) => (i.media_type === 'tv' || i.first_air_date) && i.id);
+      const tvPool = dedupeItems([
+        ...filteredTvTop10,
+        ...tvTrending,
+        ...(topRatedTVData.results || [])
+      ]).filter((item: any) => Boolean(item.backdrop_path));
+      const tvHeroPool = tvPool.slice(0, 6);
+
+      // 3. Movies Pool
+      const movieTrending = (trendingData.results || []).filter((i: any) => (i.media_type === 'movie' || i.release_date) && i.id);
+      const moviePool = dedupeItems([
+        ...(movieTop10Data.results || []),
+        ...movieTrending,
+        ...(topRatedMoviesData.results || [])
+      ]).filter((item: any) => Boolean(item.backdrop_path));
+      const movieHeroPool = moviePool.slice(0, 6);
+
+      // 4. Mixed Home Hero (2 anime + 2 TV + 2 movie, shuffled)
       const selectedAnime = animePool.slice(0, 2);
-      const tvPool = (trendingData.results || []).filter((i: any) => i.media_type === 'tv' && i.id);
-      const moviePool = (trendingData.results || []).filter((i: any) => i.media_type === 'movie' && i.id);
-
       const selectedTv = tvPool.slice(0, 2);
       const selectedMovie = moviePool.slice(0, 2);
-
       const combinedHeroItems = [...selectedAnime, ...selectedTv, ...selectedMovie];
-
       for (let i = combinedHeroItems.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [combinedHeroItems[i], combinedHeroItems[j]] = [combinedHeroItems[j], combinedHeroItems[i]];
       }
 
-      const detailedHeroItems = await Promise.all(
-        combinedHeroItems.map(async (item: any) => {
-          if (item.source === 'anilist') return item;
-          try {
-            return await fetchDetails(item.id, item.media_type || 'movie');
-          } catch (e) {
-            return item;
-          }
-        })
-      );
+      // Fetch details in parallel for TV & Movies heroes
+      const [detailedHomeHero, detailedTvHero, detailedMovieHero] = await Promise.all([
+        Promise.all(
+          combinedHeroItems.map(async (item: any) => {
+            if (item.source === 'anilist') return item;
+            try {
+              return await fetchDetails(item.id, item.media_type || (item.first_air_date ? 'tv' : 'movie'));
+            } catch {
+              return item;
+            }
+          })
+        ),
+        Promise.all(
+          tvHeroPool.map(async (item: any) => {
+            try {
+              return await fetchDetails(item.id, 'tv');
+            } catch {
+              return item;
+            }
+          })
+        ),
+        Promise.all(
+          movieHeroPool.map(async (item: any) => {
+            try {
+              return await fetchDetails(item.id, 'movie');
+            } catch {
+              return item;
+            }
+          })
+        )
+      ]);
+      const detailedAnimeHero = animeHeroPool;
 
-      const filteredTop10 = (top10Data.results || []).filter((item: any) => {
-        const title = item.title || item.name || '';
-        return title !== 'Tagesschau' && title !== 'Paradise Hotel';
-      });
-
-      const top10 = mix(filteredTop10, trendingAnimeData.results || []).slice(0, 10);
+      // Populate rails
+      const top10 = mix(filteredTvTop10, trendingAnimeData.results || []).slice(0, 10);
       const trending = dedupeItems(trendingData.results || []);
       const topRated = mix(topRatedMoviesData.results || [], topRatedAnimeData.results || []);
 
+      // Home Rails
       railCache['top10'] = top10;
       railCache['trending'] = trending;
       railCache['topRated'] = topRated;
 
+      // TV Shows Rails
+      railCache['shows_top10'] = filteredTvTop10.slice(0, 10);
+      railCache['shows_suggested'] = dedupeItems(tvPool).slice(2, 18);
+      railCache['shows_top_rated'] = dedupeItems(topRatedTVData.results || []);
+
+      // Movies Rails
+      railCache['movies_top10'] = dedupeItems(movieTop10Data.results || []).slice(0, 10);
+      railCache['movies_suggested'] = dedupeItems(moviePool).slice(2, 18);
+      railCache['movies_top_rated'] = dedupeItems(topRatedMoviesData.results || []);
+
+      // Anime Rails
+      const animeTop10List = dedupeItems(trendingAnimeData.results || []).slice(0, 10);
+      const top10AnimeIds = new Set(animeTop10List.map((i: any) => i.id));
+
+      railCache['anime_top10'] = animeTop10List;
+      railCache['anime_suggested'] = dedupeItems(top100AnimeData.results || []);
+
+      // For Anime Masterpieces & Hall of Fame: start from where the results of the Top 10 anime end
+      const allTopRatedAnime = dedupeItems(topRatedAnimeData.results || []);
+      const masterpiecesAfterTop10 = allTopRatedAnime.slice(10).filter((i: any) => !top10AnimeIds.has(i.id));
+      railCache['anime_top_rated'] = masterpiecesAfterTop10.length > 0
+        ? masterpiecesAfterTop10
+        : allTopRatedAnime.filter((i: any) => !top10AnimeIds.has(i.id));
+
       const initialData = {
-        heroItems: detailedHeroItems,
+        heroItems: detailedHomeHero,
+        heroShows: detailedTvHero,
+        heroMovies: detailedMovieHero,
+        heroAnime: detailedAnimeHero,
         top10,
         trending,
-        topRated
+        topRated,
+        shows_top10: railCache['shows_top10'],
+        shows_suggested: railCache['shows_suggested'],
+        shows_top_rated: railCache['shows_top_rated'],
+        movies_top10: railCache['movies_top10'],
+        movies_suggested: railCache['movies_suggested'],
+        movies_top_rated: railCache['movies_top_rated'],
+        anime_top10: railCache['anime_top10'],
+        anime_suggested: railCache['anime_suggested'],
+        anime_top_rated: railCache['anime_top_rated']
       };
 
-      // Cache immediately so Home renders without delay
       cachedInitialBatch = initialData;
 
-      // In the background, warm logos, ambient colors, and GPU image cache without blocking initial render
-      const priorityItems = detailedHeroItems.slice(0, 6);
+      // Warm logos & ambient colors in background for all hero entries
+      const allHeroItems = [
+        ...detailedHomeHero,
+        ...detailedTvHero,
+        ...detailedMovieHero,
+        ...detailedAnimeHero
+      ];
       Promise.all([
-        preloadLogosForItems(priorityItems),
-        preloadHeroAmbientColors(detailedHeroItems),
+        preloadLogosForItems(allHeroItems),
+        preloadHeroAmbientColors(allHeroItems)
       ]).catch(() => {});
 
       const criticalImageUrls: (string | null | undefined)[] = [];
-      const firstHero = detailedHeroItems[0];
-      if (firstHero) {
-        if (firstHero.backdrop_path) {
+      for (const h of allHeroItems.slice(0, 12)) {
+        if (h?.backdrop_path) {
           criticalImageUrls.push(
-            firstHero.backdrop_path.startsWith('http')
-              ? firstHero.backdrop_path
-              : `${IMAGE_BASE_URL}${firstHero.backdrop_path}`
+            h.backdrop_path.startsWith('http') ? h.backdrop_path : `${IMAGE_BASE_URL}${h.backdrop_path}`
           );
         }
-        criticalImageUrls.push(getCachedLogo(firstHero));
-      }
-
-      for (const h of detailedHeroItems) {
+        criticalImageUrls.push(getCachedLogo(h));
         if (h?.poster_path) {
           criticalImageUrls.push(
             h.poster_path.startsWith('http') ? h.poster_path : `${IMAGE_BASE_URL_W500}${h.poster_path}`
           );
         }
       }
-
-      for (const card of (top10.slice(0, 6) as any[])) {
-        if (card?.backdrop_path) {
-          criticalImageUrls.push(
-            card.backdrop_path.startsWith('http') ? card.backdrop_path : `${IMAGE_BASE_URL_W500}${card.backdrop_path}`
-          );
-        }
-        criticalImageUrls.push(getCachedLogo(card));
-      }
-
       preloadImageUrls(criticalImageUrls, 600).catch(() => {});
 
       return initialData;
@@ -449,62 +520,77 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
   };
 
   const heroItems = useMemo(() => {
-    if (!initialData.heroItems || initialData.heroItems.length === 0) return [];
+    if (!initialData) return [];
     if (typeFilter === 'shows') {
-      const shows = initialData.heroItems.filter(
-        (i: any) => i.source === 'anilist' || i.media_type === 'tv' || i.first_air_date || i.number_of_seasons
+      if (initialData.heroShows && initialData.heroShows.length > 0) {
+        return initialData.heroShows;
+      }
+      const shows = (initialData.heroItems || []).filter(
+        (i: any) => i.media_type === 'tv' || i.first_air_date || i.number_of_seasons
       );
-      return shows.length > 0 ? shows : initialData.heroItems;
+      return shows.length > 0 ? shows : initialData.heroItems || [];
     }
     if (typeFilter === 'movies') {
-      const movies = initialData.heroItems.filter(
+      if (initialData.heroMovies && initialData.heroMovies.length > 0) {
+        return initialData.heroMovies;
+      }
+      const movies = (initialData.heroItems || []).filter(
         (i: any) => i.media_type === 'movie' || i.release_date
       );
-      return movies.length > 0 ? movies : initialData.heroItems;
+      return movies.length > 0 ? movies : initialData.heroItems || [];
     }
     if (typeFilter === 'anime') {
-      const animes = initialData.heroItems.filter(
-        (i: any) => i.source === 'anilist' || i.anime_format || (i.origin_country && i.origin_country.includes('JP'))
+      if (initialData.heroAnime && initialData.heroAnime.length > 0) {
+        return initialData.heroAnime;
+      }
+      const animes = (initialData.heroItems || []).filter(
+        (i: any) => i.source === 'anilist' || i.anime_format
       );
-      return animes.length > 0 ? animes : initialData.heroItems;
+      return animes.length > 0 ? animes : initialData.heroItems || [];
     }
-    if (typeFilter === 'sports') {
-      const sports = (railCache['sports'] || []).filter((i: any) => i.backdrop_path);
-      return sports.length > 0 ? sports : initialData.heroItems;
-    }
-    if (typeFilter === 'sparks') {
-      const sparks = (initialData.top10 || initialData.trending || []).filter((i: any) => i.backdrop_path);
-      return sparks.length > 0 ? sparks : initialData.heroItems;
-    }
-    return initialData.heroItems;
-  }, [initialData.heroItems, initialData.top10, initialData.trending, typeFilter]);
+    return initialData.heroItems || [];
+  }, [initialData, typeFilter]);
 
   // Gentle background preloader: after initial fold loads, sequentially warm remaining rails
   useEffect(() => {
     if (!homeReady || loadError || remainingRailsPreloaded) return;
 
     const remainingLoaders = [
+      // TV categories
+      () => getTmdbTVGenre(18).then(t => { railCache['shows_drama'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(80).then(t => { railCache['shows_crime'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(10765).then(t => { railCache['shows_scifi'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(10759).then(t => { railCache['shows_action'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(35).then(t => { railCache['shows_comedy'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(9648).then(t => { railCache['shows_mystery'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(99).then(t => { railCache['shows_documentary'] = dedupeItems(t.results || []); }),
+      () => getTmdbTVGenre(16).then(t => { railCache['shows_animation'] = dedupeItems(t.results || []); }),
+      // Movie categories
+      () => getTmdbGenre(28).then(t => { railCache['movies_action'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(12).then(t => { railCache['movies_adventure'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(878).then(t => { railCache['movies_scifi'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(53).then(t => { railCache['movies_thriller'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(27).then(t => { railCache['movies_horror'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(80).then(t => { railCache['movies_crime'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(35).then(t => { railCache['movies_comedy'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(10749).then(t => { railCache['movies_romance'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(18).then(t => { railCache['movies_drama'] = dedupeItems(t.results || []); }),
+      () => getTmdbGenre(14).then(t => { railCache['movies_fantasy'] = dedupeItems(t.results || []); }),
+      // Anime categories
+      () => getAnilistGenre('Action').then(a => { railCache['anime_action'] = dedupeItems(a.results || []); }),
+      () => getAnilistTag('Isekai').then(a => { railCache['anime_isekai'] = dedupeItems(a.results || []); }),
+      () => getAnilistGenre('Supernatural').then(a => { railCache['anime_supernatural'] = dedupeItems(a.results || []); }),
+      () => getAnilistGenre('Psychological').then(a => { railCache['anime_psychological'] = dedupeItems(a.results || []); }),
+      () => getAnilistGenre('Mecha').then(a => { railCache['anime_mecha'] = dedupeItems(a.results || []); }),
+      () => getAnilistGenre('Slice of Life').then(a => { railCache['anime_slice_of_life'] = dedupeItems(a.results || []); }),
+      () => getAnilistGenre('Romance').then(a => { railCache['anime_romance'] = dedupeItems(a.results || []); }),
+      () => getAnilistTag('School').then(a => { railCache['anime_school'] = dedupeItems(a.results || []); }),
+      // Home mixed categories
       () => Promise.all([getTmdbGenre(28), getAnilistGenre('Action')]).then(([t, a]) => { railCache['action'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(28), getAnilistTag('Martial Arts')]).then(([t, a]) => { railCache['martialArts'] = mix(t.results?.slice(8), a.results); }),
       () => Promise.all([getTmdbGenre(12), getAnilistGenre('Adventure')]).then(([t, a]) => { railCache['adventure'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(28), getAnilistGenre('Sports')]).then(([t, a]) => { railCache['sports'] = mix(t.results?.slice(8), a.results); }),
-      () => Promise.all([getTmdbGenre(878), getAnilistGenre('Mecha')]).then(([t, a]) => { railCache['mecha'] = mix(t.results?.slice(8), a.results); }),
-      () => Promise.all([getTmdbGenre(14), getAnilistGenre('Supernatural')]).then(([t, a]) => { railCache['supernatural'] = mix(t.results?.slice(6), a.results); }),
-      () => Promise.all([getTmdbGenre(12), getAnilistTag('Isekai')]).then(([t, a]) => { railCache['isekai'] = mix(t.results?.slice(6), a.results); }),
       () => Promise.all([getTmdbGenre(878), getAnilistGenre('Sci-Fi')]).then(([t, a]) => { railCache['scifi'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(878), getAnilistTag('Cyberpunk')]).then(([t, a]) => { railCache['cyberpunk'] = mix(t.results?.slice(6), a.results); }),
-      () => Promise.all([getTmdbGenre(14), getAnilistGenre('Fantasy')]).then(([t, a]) => { railCache['fantasy'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(53), getAnilistTag('Survival')]).then(([t, a]) => { railCache['survival'] = mix(t.results?.slice(6), a.results); }),
       () => Promise.all([getTmdbGenre(27), getAnilistGenre('Horror')]).then(([t, a]) => { railCache['horror'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(53), getAnilistGenre('Psychological')]).then(([t, a]) => { railCache['thriller'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(9648), getAnilistGenre('Mystery')]).then(([t, a]) => { railCache['mystery'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(10752), getAnilistTag('Military')]).then(([t, a]) => { railCache['military'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(80), getAnilistGenre('Mystery')]).then(([t, a]) => { railCache['crime'] = mix(t.results, a.results?.slice(6)); }),
       () => Promise.all([getTmdbGenre(35), getAnilistGenre('Comedy')]).then(([t, a]) => { railCache['comedy'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(35), getAnilistTag('School')]).then(([t, a]) => { railCache['teen'] = mix(t.results?.slice(6), a.results); }),
-      () => Promise.all([getTmdbTVGenre(35), getAnilistGenre('Comedy')]).then(([t, a]) => { railCache['sitcom'] = mix(t.results, a.results?.slice(6)); }),
-      () => Promise.all([getTmdbGenre(10751), getAnilistGenre('Slice of Life')]).then(([t, a]) => { railCache['sliceOfLife'] = mix(t.results, a.results); }),
-      () => Promise.all([getTmdbGenre(10751), getAnilistGenre('Adventure')]).then(([t, a]) => { railCache['family'] = mix(t.results, a.results?.slice(6)); }),
       () => Promise.all([getTmdbGenre(10749), getAnilistGenre('Romance')]).then(([t, a]) => { railCache['romance'] = mix(t.results, a.results); }),
       () => Promise.all([getTmdbGenre(18), getAnilistGenre('Drama')]).then(([t, a]) => { railCache['drama'] = mix(t.results, a.results); }),
       () => Promise.all([getTmdbGenre(99), getAnilistGenre('Drama')]).then(([t, a]) => { railCache['documentary'] = mix(t.results, a.results?.slice(6)); }),
@@ -579,258 +665,635 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
 
           {/* Content Feed with Continuous, Spaced Categories */}
           <div className="relative z-20 flex flex-col gap-4 pt-8 md:pt-10">
-            {/* Ranked Spotlight: Trending Now (Portrait posters -> uses portrait skeleton loader) */}
-            <LazyRail
-              title="Trending Now"
-              railKey="top10"
-              isTop10={true}
-              eager={true}
-              initialItems={initialData.top10}
-              loadItems={async () => {
-                const [t, a] = await Promise.all([safeFetch(fetchTop10), safeFetch(() => fetchTrendingAnime(15))]);
-                const filtered = (t.results || []).filter((item: any) => {
-                  const title = item.title || item.name || '';
-                  return title !== 'Tagesschau' && title !== 'Paradise Hotel';
-                });
-                return mix(filtered, a.results || []).slice(0, 10);
-              }}
-            />
+            {typeFilter === 'shows' && (
+              <>
+                <LazyRail
+                  title="Trending Now in TV"
+                  railKey="shows_top10"
+                  isTop10={true}
+                  eager={true}
+                  initialItems={initialData.shows_top10}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchTop10);
+                    return (t.results || []).filter((i: any) => {
+                      const title = i.title || i.name || '';
+                      return title !== 'Tagesschau' && title !== 'Paradise Hotel';
+                    }).slice(0, 10);
+                  }}
+                />
+                <LazyRail
+                  title="Suggested TV Series"
+                  railKey="shows_suggested"
+                  eager={true}
+                  initialItems={initialData.shows_suggested}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchTrending);
+                    return dedupeItems((t.results || []).filter((i: any) => i.media_type === 'tv' || i.first_air_date));
+                  }}
+                />
+                <LazyRail
+                  title="Masterpiece Series & Hall of Fame"
+                  railKey="shows_top_rated"
+                  initialItems={initialData.shows_top_rated}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchTopRatedTV);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <PlatformRow />
+                <LazyRail
+                  title="Bingeable Drama Series"
+                  railKey="shows_drama"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(18);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Crime, Heists & Underworld"
+                  railKey="shows_crime"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(80);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Sci-Fi & Fantasy Series"
+                  railKey="shows_scifi"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(10765);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Action & Adventure Series"
+                  railKey="shows_action"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(10759);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Sitcoms & Comfort Comedy"
+                  railKey="shows_comedy"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(35);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Mystery & Mind Games"
+                  railKey="shows_mystery"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(9648);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Docuseries & Real Stories"
+                  railKey="shows_documentary"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(99);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Animated TV & Family Classics"
+                  railKey="shows_animation"
+                  loadItems={async () => {
+                    const t = await getTmdbTVGenre(16);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+              </>
+            )}
 
-            {/* Curated Recommendations */}
-            <LazyRail
-              title="Suggested For You"
-              railKey="trending"
-              eager={true}
-              initialItems={initialData.trending?.slice(4)}
-              loadItems={async () => {
-                const t = await safeFetch(fetchTrending);
-                return dedupeItems(t.results || []).slice(4);
-              }}
-            />
+            {typeFilter === 'movies' && (
+              <>
+                <LazyRail
+                  title="Trending Now in Movies"
+                  railKey="movies_top10"
+                  isTop10={true}
+                  eager={true}
+                  initialItems={initialData.movies_top10}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchMovieTop10);
+                    return dedupeItems(t.results || []).slice(0, 10);
+                  }}
+                />
+                <LazyRail
+                  title="Suggested Movies For You"
+                  railKey="movies_suggested"
+                  eager={true}
+                  initialItems={initialData.movies_suggested}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchTrending);
+                    return dedupeItems((t.results || []).filter((i: any) => i.media_type === 'movie' || i.release_date));
+                  }}
+                />
+                <LazyRail
+                  title="Cinema Masterpieces & Hall of Fame"
+                  railKey="movies_top_rated"
+                  initialItems={initialData.movies_top_rated}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchAllTimeFavorites);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <PlatformRow />
+                <LazyRail
+                  title="Blockbuster Action & Combat"
+                  railKey="movies_action"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(28);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Grand Adventures & Quests"
+                  railKey="movies_adventure"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(12);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Sci-Fi & Cyber Visions"
+                  railKey="movies_scifi"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(878);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Mind-Bending & Psychological Thrillers"
+                  railKey="movies_thriller"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(53);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Horror & Dark Nightmares"
+                  railKey="movies_horror"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(27);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Crime, Heists & Mobsters"
+                  railKey="movies_crime"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(80);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Comedies & Laughs"
+                  railKey="movies_comedy"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(35);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Romance & Heartstrings"
+                  railKey="movies_romance"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(10749);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Gripping Dramas & Deep Stories"
+                  railKey="movies_drama"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(18);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Epic Fantasy & Mythic Quests"
+                  railKey="movies_fantasy"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(14);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Family & Heartfelt Animation"
+                  railKey="movies_family"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(10751);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Real Stories & Documentaries"
+                  railKey="movies_documentary"
+                  loadItems={async () => {
+                    const t = await getTmdbGenre(99);
+                    return dedupeItems(t.results || []);
+                  }}
+                />
+              </>
+            )}
 
-            {/* All-Time Critically Acclaimed */}
-            <LazyRail
-              title="Masterpieces & Hall of Fame"
-              railKey="topRated"
-              initialItems={initialData.topRated}
-              loadItems={async () => {
-                const [t, a] = await Promise.all([safeFetch(fetchAllTimeFavorites), safeFetch(() => fetchTopRatedAnime(15))]);
-                return mix(t.results, a.results);
-              }}
-            />
+            {typeFilter === 'anime' && (
+              <>
+                <LazyRail
+                  title="Top 10 Trending Anime"
+                  railKey="anime_top10"
+                  isTop10={true}
+                  eager={true}
+                  initialItems={initialData.anime_top10}
+                  loadItems={async () => {
+                    const a = await safeFetch(() => fetchTrendingAnime(15));
+                    return dedupeItems(a.results || []).slice(0, 10);
+                  }}
+                />
+                <LazyRail
+                  title="Suggested Anime For You"
+                  railKey="anime_suggested"
+                  eager={true}
+                  initialItems={initialData.anime_suggested}
+                  loadItems={async () => {
+                    const a = await safeFetch(() => fetchTop100Anime(30));
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Anime Masterpieces & Hall of Fame"
+                  railKey="anime_top_rated"
+                  initialItems={initialData.anime_top_rated}
+                  loadItems={async () => {
+                    const [top10Res, topRatedRes] = await Promise.all([
+                      safeFetch(() => fetchTrendingAnime(15)),
+                      safeFetch(() => fetchTopRatedAnime(35))
+                    ]);
+                    const top10List = dedupeItems(top10Res.results || []).slice(0, 10);
+                    const top10Ids = new Set(top10List.map((i: any) => i.id));
+                    const allTopRated = dedupeItems(topRatedRes.results || []);
+                    const afterTop10 = allTopRated.slice(10).filter((i: any) => !top10Ids.has(i.id));
+                    return afterTop10.length > 0 ? afterTop10 : allTopRated.filter((i: any) => !top10Ids.has(i.id));
+                  }}
+                />
+                <LazyRail
+                  title="Shonen & High-Octane Action"
+                  railKey="anime_action"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Action');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Isekai & Alternate Worlds"
+                  railKey="anime_isekai"
+                  loadItems={async () => {
+                    const a = await getAnilistTag('Isekai');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Supernatural & Dark Fantasy"
+                  railKey="anime_supernatural"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Supernatural');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Mind-Bending & Psychological Thrillers"
+                  railKey="anime_psychological"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Psychological');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Mecha, Tech & Cyberpunk"
+                  railKey="anime_mecha"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Mecha');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Warm & Cozy: Slice of Life"
+                  railKey="anime_slice_of_life"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Slice of Life');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Romance & Heartstrings"
+                  railKey="anime_romance"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Romance');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="High School & Campus Life"
+                  railKey="anime_school"
+                  loadItems={async () => {
+                    const a = await getAnilistTag('School');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Sports & Fierce Rivalries"
+                  railKey="anime_sports"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Sports');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Horror & Macabre Nightmares"
+                  railKey="anime_horror"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Horror');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Grand Adventure & Quests"
+                  railKey="anime_adventure"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Adventure');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+                <LazyRail
+                  title="Pure Comedy & Laughs"
+                  railKey="anime_comedy"
+                  loadItems={async () => {
+                    const a = await getAnilistGenre('Comedy');
+                    return dedupeItems(a.results || []);
+                  }}
+                />
+              </>
+            )}
 
-            {/* Streaming Providers */}
-            <PlatformRow />
+            {(!typeFilter || (typeFilter !== 'shows' && typeFilter !== 'movies' && typeFilter !== 'anime')) && (
+              <>
+                {/* Ranked Spotlight: Trending Now (Portrait posters -> uses portrait skeleton loader) */}
+                <LazyRail
+                  title="Trending Now"
+                  railKey="top10"
+                  isTop10={true}
+                  eager={true}
+                  initialItems={initialData.top10}
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([safeFetch(fetchTop10), safeFetch(() => fetchTrendingAnime(15))]);
+                    const filtered = (t.results || []).filter((item: any) => {
+                      const title = item.title || item.name || '';
+                      return title !== 'Tagesschau' && title !== 'Paradise Hotel';
+                    });
+                    return mix(filtered, a.results || []).slice(0, 10);
+                  }}
+                />
 
-            {/* High Energy & Combat */}
-            <LazyRail
-              title="Action & Adventure"
-              railKey="action"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistGenre('Action')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Martial Arts & Hand-to-Hand Combat"
-              railKey="martialArts"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistTag('Martial Arts')]);
-                return mix(t.results?.slice(8), a.results);
-              }}
-            />
-            <LazyRail
-              title="Grand Adventures & Quests"
-              railKey="adventure"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(12), getAnilistGenre('Adventure')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="High-Octane Sports & Rivalries"
-              railKey="sports"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistGenre('Sports')]);
-                return mix(t.results?.slice(8), a.results);
-              }}
-            />
-            <LazyRail
-              title="Mecha, Tech & Future Warfare"
-              railKey="mecha"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistGenre('Mecha')]);
-                return mix(t.results?.slice(8), a.results);
-              }}
-            />
+                {/* Curated Recommendations */}
+                <LazyRail
+                  title="Suggested For You"
+                  railKey="trending"
+                  eager={true}
+                  initialItems={initialData.trending?.slice(4)}
+                  loadItems={async () => {
+                    const t = await safeFetch(fetchTrending);
+                    return dedupeItems(t.results || []).slice(4);
+                  }}
+                />
 
-            {/* Supernatural, Fantasy & Sci-Fi */}
-            <LazyRail
-              title="Supernatural & Dark Fantasy"
-              railKey="supernatural"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(14), getAnilistGenre('Supernatural')]);
-                return mix(t.results?.slice(6), a.results);
-              }}
-            />
-            <LazyRail
-              title="Isekai & Alternate Realities"
-              railKey="isekai"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(12), getAnilistTag('Isekai')]);
-                return mix(t.results?.slice(6), a.results);
-              }}
-            />
-            <LazyRail
-              title="Sci-Fi & Cyber Realms"
-              railKey="scifi"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistGenre('Sci-Fi')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Cyberpunk & Dystopian Visions"
-              railKey="cyberpunk"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistTag('Cyberpunk')]);
-                return mix(t.results?.slice(6), a.results);
-              }}
-            />
-            <LazyRail
-              title="Epic Fantasy & Mythic Worlds"
-              railKey="fantasy"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(14), getAnilistGenre('Fantasy')]);
-                return mix(t.results, a.results);
-              }}
-            />
+                {/* All-Time Critically Acclaimed */}
+                <LazyRail
+                  title="Masterpieces & Hall of Fame"
+                  railKey="topRated"
+                  initialItems={initialData.topRated}
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([safeFetch(fetchAllTimeFavorites), safeFetch(() => fetchTopRatedAnime(15))]);
+                    return mix(t.results, a.results);
+                  }}
+                />
 
-            {/* Survival, Thrillers & Suspense */}
-            <LazyRail
-              title="Survival Games & Apocalyptic Worlds"
-              railKey="survival"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(53), getAnilistTag('Survival')]);
-                return mix(t.results?.slice(6), a.results);
-              }}
-            />
-            <LazyRail
-              title="Horror & Dark Nightmares"
-              railKey="horror"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(27), getAnilistGenre('Horror')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Mind-Bending & Psychological Thrillers"
-              railKey="thriller"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(53), getAnilistGenre('Psychological')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Mystery & Whodunits"
-              railKey="mystery"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(9648), getAnilistGenre('Mystery')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Espionage, War & Tactical Battles"
-              railKey="military"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(10752), getAnilistTag('Military')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Crime, Heists & Underworld"
-              railKey="crime"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(80), getAnilistGenre('Mystery')]);
-                return mix(t.results, a.results?.slice(6));
-              }}
-            />
+                {/* Streaming Providers */}
+                <PlatformRow />
 
-            {/* Comedy, Campus & Comfort */}
-            <LazyRail
-              title="Comedies & Laughs"
-              railKey="comedy"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(35), getAnilistGenre('Comedy')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Campus Life & High School Dramas"
-              railKey="teen"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(35), getAnilistTag('School')]);
-                return mix(t.results?.slice(6), a.results);
-              }}
-            />
-            <LazyRail
-              title="Sitcoms & Bingeable Comfort"
-              railKey="sitcom"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbTVGenre(35), getAnilistGenre('Comedy')]);
-                return mix(t.results, a.results?.slice(6));
-              }}
-            />
-            <LazyRail
-              title="Warm & Cozy: Slice of Life"
-              railKey="sliceOfLife"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(10751), getAnilistGenre('Slice of Life')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Family & Heartfelt Animation"
-              railKey="family"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(10751), getAnilistGenre('Adventure')]);
-                return mix(t.results, a.results?.slice(6));
-              }}
-            />
+                {/* High Energy & Combat */}
+                <LazyRail
+                  title="Action & Adventure"
+                  railKey="action"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistGenre('Action')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Martial Arts & Hand-to-Hand Combat"
+                  railKey="martialArts"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistTag('Martial Arts')]);
+                    return mix(t.results?.slice(8), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Grand Adventures & Quests"
+                  railKey="adventure"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(12), getAnilistGenre('Adventure')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="High-Octane Sports & Rivalries"
+                  railKey="sports"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(28), getAnilistGenre('Sports')]);
+                    return mix(t.results?.slice(8), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Mecha, Tech & Future Warfare"
+                  railKey="mecha"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistGenre('Mecha')]);
+                    return mix(t.results?.slice(8), a.results);
+                  }}
+                />
 
-            {/* Romance, Drama, Docs & Music */}
-            <LazyRail
-              title="Romance & Heartstrings"
-              railKey="romance"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(10749), getAnilistGenre('Romance')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Gripping Drama & Emotional Tales"
-              railKey="drama"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(18), getAnilistGenre('Drama')]);
-                return mix(t.results, a.results);
-              }}
-            />
-            <LazyRail
-              title="Real Stories & Documentaries"
-              railKey="documentary"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(99), getAnilistGenre('Drama')]);
-                return mix(t.results, a.results?.slice(6));
-              }}
-            />
-            <LazyRail
-              title="Musical & Rhythmic Spotlight"
-              railKey="music"
-              loadItems={async () => {
-                const [t, a] = await Promise.all([getTmdbGenre(10402), getAnilistGenre('Music')]);
-                return mix(t.results, a.results);
-              }}
-            />
+                {/* Supernatural, Fantasy & Sci-Fi */}
+                <LazyRail
+                  title="Supernatural & Dark Fantasy"
+                  railKey="supernatural"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(14), getAnilistGenre('Supernatural')]);
+                    return mix(t.results?.slice(6), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Isekai & Alternate Realities"
+                  railKey="isekai"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(12), getAnilistTag('Isekai')]);
+                    return mix(t.results?.slice(6), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Sci-Fi & Cyber Realms"
+                  railKey="scifi"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistGenre('Sci-Fi')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Cyberpunk & Dystopian Visions"
+                  railKey="cyberpunk"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(878), getAnilistTag('Cyberpunk')]);
+                    return mix(t.results?.slice(6), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Epic Fantasy & Mythic Worlds"
+                  railKey="fantasy"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(14), getAnilistGenre('Fantasy')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+
+                {/* Survival, Thrillers & Suspense */}
+                <LazyRail
+                  title="Survival Games & Apocalyptic Worlds"
+                  railKey="survival"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(53), getAnilistTag('Survival')]);
+                    return mix(t.results?.slice(6), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Horror & Dark Nightmares"
+                  railKey="horror"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(27), getAnilistGenre('Horror')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Mind-Bending & Psychological Thrillers"
+                  railKey="thriller"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(53), getAnilistGenre('Psychological')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Mystery & Whodunits"
+                  railKey="mystery"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(9648), getAnilistGenre('Mystery')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Espionage, War & Tactical Battles"
+                  railKey="military"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(10752), getAnilistTag('Military')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Crime, Heists & Underworld"
+                  railKey="crime"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(80), getAnilistGenre('Mystery')]);
+                    return mix(t.results, a.results?.slice(6));
+                  }}
+                />
+
+                {/* Comedy, Campus & Comfort */}
+                <LazyRail
+                  title="Comedies & Laughs"
+                  railKey="comedy"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(35), getAnilistGenre('Comedy')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Campus Life & High School Dramas"
+                  railKey="teen"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(35), getAnilistTag('School')]);
+                    return mix(t.results?.slice(6), a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Sitcoms & Bingeable Comfort"
+                  railKey="sitcom"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbTVGenre(35), getAnilistGenre('Comedy')]);
+                    return mix(t.results, a.results?.slice(6));
+                  }}
+                />
+                <LazyRail
+                  title="Warm & Cozy: Slice of Life"
+                  railKey="sliceOfLife"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(10751), getAnilistGenre('Slice of Life')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Family & Heartfelt Animation"
+                  railKey="family"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(10751), getAnilistGenre('Adventure')]);
+                    return mix(t.results, a.results?.slice(6));
+                  }}
+                />
+
+                {/* Romance, Drama, Docs & Music */}
+                <LazyRail
+                  title="Romance & Heartstrings"
+                  railKey="romance"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(10749), getAnilistGenre('Romance')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Gripping Drama & Emotional Tales"
+                  railKey="drama"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(18), getAnilistGenre('Drama')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+                <LazyRail
+                  title="Real Stories & Documentaries"
+                  railKey="documentary"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(99), getAnilistGenre('Drama')]);
+                    return mix(t.results, a.results?.slice(6));
+                  }}
+                />
+                <LazyRail
+                  title="Musical & Rhythmic Spotlight"
+                  railKey="music"
+                  loadItems={async () => {
+                    const [t, a] = await Promise.all([getTmdbGenre(10402), getAnilistGenre('Music')]);
+                    return mix(t.results, a.results);
+                  }}
+                />
+              </>
+            )}
           </div>
         </>
       )}

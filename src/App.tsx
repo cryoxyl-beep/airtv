@@ -85,7 +85,7 @@ function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {!isHomeScreen && children}
         {mountHome && (
-          <Home typeFilter={lastFilterRef.current} isActive={isHomeScreen} />
+          <Home key={lastFilterRef.current || 'home'} typeFilter={lastFilterRef.current} isActive={isHomeScreen} />
         )}
       </div>
     </div>

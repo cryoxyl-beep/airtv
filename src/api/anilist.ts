@@ -399,7 +399,31 @@ export const fetchAnimeByTag = async (tag: string, perPage = 20, skipTmdbImages 
   }
 };
 
-export const fetchTopRatedAnime = async (perPage = 20, skipTmdbImages = false) => {
+export const fetchTopRatedAnime = async (perPage = 20, skipTmdbImages = false, page = 1) => {
+  await preloadFribbMapping();
+  const query = `
+    query ($page: Int, $perPage: Int) {
+      Page (page: $page, perPage: $perPage) {
+        media (type: ANIME, sort: SCORE_DESC, status_not: NOT_YET_RELEASED, isAdult: false) {
+          ${MEDIA_FIELDS}
+        }
+      }
+    }
+  `;
+  try {
+    const data = await fetchAniList(query, { page, perPage });
+    const mediaItems = data.data?.Page?.media || [];
+    const results = await Promise.all(
+      mediaItems.map((item: any) => normalizeAniListToTmdb(item, skipTmdbImages))
+    );
+    return { results: results.filter(Boolean) };
+  } catch (e) {
+    console.error('fetchTopRatedAnime failed:', e);
+    return { results: [] };
+  }
+};
+
+export const fetchTop100Anime = async (perPage = 30, skipTmdbImages = false) => {
   await preloadFribbMapping();
   const query = `
     query ($perPage: Int) {
@@ -418,7 +442,7 @@ export const fetchTopRatedAnime = async (perPage = 20, skipTmdbImages = false) =
     );
     return { results: results.filter(Boolean) };
   } catch (e) {
-    console.error('fetchTopRatedAnime failed:', e);
+    console.error('fetchTop100Anime failed:', e);
     return { results: [] };
   }
 };

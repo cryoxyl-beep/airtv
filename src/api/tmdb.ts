@@ -571,6 +571,62 @@ export const fetchTop10 = async () => {
   return p;
 };
 
+export const fetchMovieTop10 = async () => {
+  const cacheKey = 'movie_popular_1';
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+
+  const p = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/movie/popular?language=en-US&page=1`, fetchOptions);
+      if (!res.ok) throw new Error('Not OK');
+      const data = await res.json();
+      if (data && data.results) {
+        data.results = filterOutAnime(data.results);
+        data.results.forEach((r: any) => { r.media_type = 'movie'; });
+        indexSeedItems(data.results, 'movie');
+      }
+      responseCache.set(cacheKey, data);
+      return data;
+    } catch (error) {
+      console.warn("fetchMovieTop10 failed:", error);
+      return { results: [] };
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+  inFlightRequests.set(cacheKey, p);
+  return p;
+};
+
+export const fetchTopRatedTV = async () => {
+  const cacheKey = 'tv_top_rated_1';
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+
+  const p = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/tv/top_rated?language=en-US&page=1`, fetchOptions);
+      if (!res.ok) throw new Error('Not OK');
+      const data = await res.json();
+      if (data && data.results) {
+        data.results = filterOutAnime(data.results);
+        data.results.forEach((r: any) => { r.media_type = 'tv'; });
+        indexSeedItems(data.results, 'tv');
+      }
+      responseCache.set(cacheKey, data);
+      return data;
+    } catch (error) {
+      console.warn("fetchTopRatedTV failed:", error);
+      return { results: [] };
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+  inFlightRequests.set(cacheKey, p);
+  return p;
+};
+
 export const fetchAnime = async () => {
   try {
     const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=16&origin_country=JP`, fetchOptions);

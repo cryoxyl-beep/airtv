@@ -81,6 +81,10 @@ export default function Hero({ items, isActive = true }: HeroProps) {
   }, [items]);
 
   useEffect(() => {
+    setActiveIndex(0);
+  }, [items]);
+
+  useEffect(() => {
     if (items && items[activeIndex]) {
       setLogoUrl(getCachedLogo(items[activeIndex]));
     }
