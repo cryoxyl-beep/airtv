@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged, signInWithRedirect } from 'firebase/auth';
+import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
+import { reconcileWatchHistoryOnSignIn, handleWatchHistorySignOut } from '../utils/preferences';
+import { syncNicheSelectionsWithAccount } from '../services/nichePreferenceService';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -25,6 +27,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
+      if (user?.uid) {
+        reconcileWatchHistoryOnSignIn(user.uid).catch(() => {});
+        syncNicheSelectionsWithAccount(user.uid).catch(() => {});
+      }
     });
     return unsubscribe;
   }, []);
@@ -40,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      handleWatchHistorySignOut();
       await signOut(auth);
     } catch (error) {
       console.error("Logout Error:", error);

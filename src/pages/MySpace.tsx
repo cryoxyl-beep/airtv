@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { User, LogOut, Play, Film, Clock, Heart, ArrowRight } from 'lucide-react';
 import { fetchDetails, IMAGE_BASE_URL_W500 } from '../api/tmdb';
 import { fetchAnimeDetails } from '../api/anilist';
+import { getAllWatchProgressItems } from '../utils/preferences';
 import EmptyState from '../components/MiyoroEmptyStates';
 import { LoadingButton } from '../components/MiyoroSpinner';
 
@@ -31,38 +32,13 @@ export default function MySpace() {
   const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
-    const loadSavedData = async () => {
-      setLoading(true);
-      try {
-        // 1. Load Continue Watching from localStorage
-        const items: WatchItem[] = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('miyoro_watch_progress_')) {
-            try {
-              const raw = localStorage.getItem(key);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                const parts = key.replace('miyoro_watch_progress_', '').split('_');
-                const itemType = parts[0] as 'movie' | 'tv' | 'anime';
-                const itemId = parts.slice(1).join('_');
-                if (itemType && itemId) {
-                  items.push({
-                    key,
-                    type: itemType,
-                    id: itemId,
-                    ...parsed,
-                  });
-                }
-              }
-            } catch (e) {
-              // ignore malformed keys
-            }
-          }
-        }
+    let isMounted = true;
 
-        // Sort by most recently watched
-        items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    const loadSavedData = async (showSpinner = false) => {
+      if (showSpinner) setLoading(true);
+      try {
+        // 1. Load unified Continue Watching (Firestore-synced when signed in, localStorage when guest)
+        const items: WatchItem[] = getAllWatchProgressItems();
 
         // Fetch title & poster metadata for up to top 12 continue watching items
         const enrichedItems = await Promise.all(
@@ -94,6 +70,7 @@ export default function MySpace() {
           })
         );
 
+        if (!isMounted) return;
         setContinueWatching(enrichedItems);
 
         // 2. Load Library items
@@ -104,12 +81,21 @@ export default function MySpace() {
       } catch (e) {
         console.warn('Error loading My Space data:', e);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
-    loadSavedData();
-  }, []);
+    loadSavedData(true);
+
+    const handleHistoryUpdated = () => {
+      loadSavedData(false);
+    };
+    window.addEventListener('miyoro-watch-history-updated', handleHistoryUpdated);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('miyoro-watch-history-updated', handleHistoryUpdated);
+    };
+  }, [currentUser?.uid]);
 
   const handleResumePlay = (item: WatchItem) => {
     if (item.type === 'movie') {

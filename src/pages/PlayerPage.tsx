@@ -11,7 +11,7 @@ import MiyoroLoader from '../components/MiyoroLoader';
 import { fetchAnivaultStream, AnimeStreamResult } from '../api/anivault';
 import { fetchMovyPlay, fetchMovySeason, MovySource, MovySubtitle } from '../api/movy';
 import { buildMovieProviderUrl, buildSeriesProviderUrl, buildAnimeProviderUrl, Provider, ProviderOptions } from '../utils/providers';
-import { saveWatchProgress, getWatchProgress, getVideoMutedPreference } from '../utils/preferences';
+import { saveWatchProgress, getWatchProgress, getVideoMutedPreference, flushWatchProgress } from '../utils/preferences';
 import { ListVideo, RefreshCw } from 'lucide-react';
 import { LoadingButton } from '../components/MiyoroSpinner';
 
@@ -45,13 +45,33 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
 
   useEffect(() => {
     if (id && type) {
-      saveWatchProgress(type, id, {
-        season: activeSeason,
-        episode: type === 'movie' ? undefined : activeEpisode,
-        progress: 0.35,
-      });
+      saveWatchProgress(
+        type,
+        id,
+        {
+          season: activeSeason,
+          episode: type === 'movie' ? undefined : activeEpisode,
+          progress: 0.35,
+        },
+        { immediate: true }
+      );
     }
+    return () => {
+      flushWatchProgress();
+    };
   }, [id, type, activeSeason, activeEpisode]);
+
+  // Flush pending watch progress immediately whenever any native video element pauses
+  useEffect(() => {
+    const handleCapturePause = () => {
+      flushWatchProgress();
+    };
+    window.addEventListener('pause', handleCapturePause, true);
+    return () => {
+      window.removeEventListener('pause', handleCapturePause, true);
+      flushWatchProgress();
+    };
+  }, []);
 
   // Fetch native anime HLS stream with Anivault API when Server: Miyoro is selected
   useEffect(() => {

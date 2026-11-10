@@ -167,7 +167,7 @@ export default function Sidebar() {
             <img
               src="/miyoro-logo-white.svg"
               alt="Miyoro"
-              style={{ width: navIconSize, height: navIconSize }}
+              style={{ width: isWatchPage ? 34 : 32, height: isWatchPage ? 34 : 32 }}
               className="object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]"
               draggable={false}
             />
