@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import Hero from '../components/Hero';
 import Row from '../components/Row';
 import PlatformRow from '../components/PlatformRow';
-import SelectYourNiche from '../components/SelectYourNiche';
 import LogoReveal from '../components/MiyoroLogoReveal';
 import HeroSkeleton from '../components/MiyoroHeroSkeleton';
 import { LandscapeSkeletonRow, LandscapeSkeletonSection } from '../components/MiyoroLandscapeSkeleton';
@@ -29,15 +28,12 @@ import {
   preloadLogosForItems,
   preloadImageUrls,
   getCachedLogo,
+  resolveLogo,
   IMAGE_BASE_URL,
   IMAGE_BASE_URL_W500
 } from '../api/tmdb';
 import { dedupeItems } from '../utils/dedupe';
 import { preloadHeroAmbientColors } from '../utils/ambientColor';
-import { getLocalNicheSelections } from '../services/nichePreferenceService';
-import { getPersonalizedSuggestedItems } from '../services/nicheContentService';
-import { getCompletedContentKeys } from '../utils/preferences';
-import { useAuth } from '../contexts/AuthContext';
 
 // Cache objects to prevent repeated loading / refetching ("not loading every time")
 let cachedInitialBatch: any = null;
@@ -166,11 +162,17 @@ export const preloadHomeData = async (): Promise<any> => {
         [combinedHeroItems[i], combinedHeroItems[j]] = [combinedHeroItems[j], combinedHeroItems[i]];
       }
 
-      // Fetch details in parallel for TV & Movies heroes
+      // Fetch details in parallel for TV & Movies heroes, and resolve logos for anime heroes
       const [detailedHomeHero, detailedTvHero, detailedMovieHero] = await Promise.all([
         Promise.all(
           combinedHeroItems.map(async (item: any) => {
-            if (item.source === 'anilist') return item;
+            if (item.source === 'anilist') {
+              try {
+                const logo = await resolveLogo(item);
+                if (logo) item.logo_path = logo;
+              } catch {}
+              return item;
+            }
             try {
               return await fetchDetails(item.id, item.media_type || (item.first_air_date ? 'tv' : 'movie'));
             } catch {
@@ -197,7 +199,15 @@ export const preloadHomeData = async (): Promise<any> => {
           })
         )
       ]);
-      const detailedAnimeHero = animeHeroPool;
+      const detailedAnimeHero = await Promise.all(
+        animeHeroPool.map(async (item: any) => {
+          try {
+            const logo = await resolveLogo(item);
+            if (logo) item.logo_path = logo;
+          } catch {}
+          return item;
+        })
+      );
 
       // Populate rails
       const top10 = mix(filteredTvTop10, trendingAnimeData.results || []).slice(0, 10);
@@ -425,9 +435,6 @@ interface HomeProps {
 }
 
 export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
-  const { currentUser } = useAuth();
-  const uid = currentUser?.uid || null;
-
   // Only ever show LogoReveal on initial cold landing directly on /home if never seen in session
   const isHomeVisit = isActive && (!typeFilter || window.location.pathname === '/home');
   const shouldReveal = isHomeVisit && !hasShownHomeReveal;
@@ -447,59 +454,6 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
     top10: [],
     topRated: []
   });
-
-  const [selectedNiches, setSelectedNiches] = useState<string[]>(() =>
-    getLocalNicheSelections(uid)
-  );
-  const [watchHistoryTick, setWatchHistoryTick] = useState(0);
-  const [personalizedSuggested, setPersonalizedSuggested] = useState<any[] | null>(null);
-
-  useEffect(() => {
-    setSelectedNiches(getLocalNicheSelections(uid));
-  }, [uid]);
-
-  useEffect(() => {
-    const handleNichesUpdated = (e: Event) => {
-      const custom = e as CustomEvent<{ selectedNiches?: string[] }>;
-      if (Array.isArray(custom.detail?.selectedNiches)) {
-        setSelectedNiches(custom.detail.selectedNiches);
-      } else {
-        setSelectedNiches(getLocalNicheSelections(uid));
-      }
-    };
-    const handleWatchUpdated = () => {
-      setWatchHistoryTick((t) => t + 1);
-    };
-    window.addEventListener('miyoro-niches-updated', handleNichesUpdated);
-    window.addEventListener('miyoro-watch-history-updated', handleWatchUpdated);
-    return () => {
-      window.removeEventListener('miyoro-niches-updated', handleNichesUpdated);
-      window.removeEventListener('miyoro-watch-history-updated', handleWatchUpdated);
-    };
-  }, [uid]);
-
-  useEffect(() => {
-    if (typeFilter) return;
-    const defaultTrending = initialData.trending?.slice(4) || [];
-    if (selectedNiches.length === 0) {
-      setPersonalizedSuggested(null);
-      return;
-    }
-
-    let active = true;
-    const completedKeys = getCompletedContentKeys();
-    getPersonalizedSuggestedItems(selectedNiches, defaultTrending, completedKeys)
-      .then((items) => {
-        if (active && items && items.length > 0) {
-          setPersonalizedSuggested(items);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      active = false;
-    };
-  }, [selectedNiches, initialData.trending, watchHistoryTick, typeFilter]);
 
   const handleRevealDone = () => {
     if (homeReadyRef.current) {
@@ -1118,30 +1072,15 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
                   }}
                 />
 
-                {/* Personalized Mixed-Media Niche Discovery */}
-                <SelectYourNiche />
-
                 {/* Curated Recommendations */}
                 <LazyRail
                   title="Suggested For You"
                   railKey="trending"
                   eager={true}
-                  initialItems={
-                    selectedNiches.length > 0 && personalizedSuggested && personalizedSuggested.length > 0
-                      ? personalizedSuggested
-                      : initialData.trending?.slice(4)
-                  }
+                  initialItems={initialData.trending?.slice(4)}
                   loadItems={async () => {
                     const t = await safeFetch(fetchTrending);
-                    const defaultTrending = dedupeItems(t.results || []).slice(4);
-                    if (selectedNiches.length > 0) {
-                      return getPersonalizedSuggestedItems(
-                        selectedNiches,
-                        defaultTrending,
-                        getCompletedContentKeys()
-                      );
-                    }
-                    return defaultTrending;
+                    return dedupeItems(t.results || []).slice(4);
                   }}
                 />
 

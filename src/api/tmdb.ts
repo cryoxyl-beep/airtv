@@ -491,7 +491,12 @@ export const preloadLogosForItems = async (items: any[]): Promise<void> => {
   for (const item of uncached) {
     try {
       const logoUrl = await resolveLogo(item);
-      if (logoUrl) preloadImageUrl(logoUrl);
+      if (logoUrl) {
+        if (!item.logo_path) {
+          item.logo_path = logoUrl;
+        }
+        preloadImageUrl(logoUrl);
+      }
     } catch (e) {
       // ignore
     }

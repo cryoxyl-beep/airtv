@@ -19,9 +19,23 @@ interface HeroProps {
 
 export default function Hero({ items, isActive = true }: HeroProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [prevItems, setPrevItems] = useState(items);
+  if (items !== prevItems) {
+    setPrevItems(items);
+    setActiveIndex(0);
+  }
+
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
   const [canShowTrailer, setCanShowTrailer] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(() => (items && items[0] ? getCachedLogo(items[0]) : null));
+  const [asyncLogoUrl, setAsyncLogoUrl] = useState<string | null>(null);
+
+  const safeIndex = items && items.length > 0 ? activeIndex % items.length : 0;
+  const activeItem = items && items[safeIndex] ? items[safeIndex] : null;
+
+  // Immediate synchronous logo check - ZERO frame delay, ZERO layout jump!
+  const syncLogo = activeItem ? (getCachedLogo(activeItem) || activeItem.logo_path || null) : null;
+  const currentLogo = syncLogo || asyncLogoUrl;
+
   const [ambientColors, setAmbientColors] = useState<Record<string, AmbientColor>>(() => {
     const initial: Record<string, AmbientColor> = {};
     if (Array.isArray(items)) {
@@ -59,7 +73,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
     });
 
     // Prepare ambient colors for all hero entries from their static artwork
-    const orderedIndices = items.map((_, i) => (activeIndex + i) % items.length);
+    const orderedIndices = items.map((_, i) => (safeIndex + i) % items.length);
     for (const idx of orderedIndices) {
       const item = items[idx];
       if (!item) continue;
@@ -78,17 +92,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
     return () => {
       isMounted = false;
     };
-  }, [items]);
-
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [items]);
-
-  useEffect(() => {
-    if (items && items[activeIndex]) {
-      setLogoUrl(getCachedLogo(items[activeIndex]));
-    }
-  }, [items, activeIndex]);
+  }, [items, safeIndex]);
 
   useEffect(() => {
     if (!document.getElementById('youtube-iframe-api')) {
@@ -105,29 +109,25 @@ export default function Hero({ items, isActive = true }: HeroProps) {
       setActiveIndex((current) => (current + 1) % items.length);
     }, 30000);
     return () => clearInterval(timer);
-  }, [items, activeIndex, isActive]);
+  }, [items, isActive]);
 
   useEffect(() => {
     let isCurrent = true;
     
-    // Clean up previous trailer and logo state
+    // Clean up previous trailer and async logo state
     setTrailerKey(null);
     setCanShowTrailer(false);
+    setAsyncLogoUrl(null);
 
-    const activeItem = items[activeIndex];
-    
-    const cachedLogo = getCachedLogo(activeItem);
-    if (!cachedLogo) {
-      setLogoUrl(null);
-    }
-    
     if (!activeItem) return;
 
-    resolveLogo(activeItem).then(url => {
-      if (isCurrent && url) {
-        setLogoUrl(url);
-      }
-    });
+    if (!syncLogo) {
+      resolveLogo(activeItem).then(url => {
+        if (isCurrent && url) {
+          setAsyncLogoUrl(url);
+        }
+      });
+    }
 
     if (!isActive) {
       return () => {
@@ -207,10 +207,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
     };
   }, [trailerKey]);
 
-  if (!items || items.length === 0) return <HeroSkeleton />;
-
-  const activeItem = items[activeIndex];
-  if (!activeItem) return <HeroSkeleton />;
+  if (!items || items.length === 0 || !activeItem) return <HeroSkeleton />;
 
   const isTrailerVisible = canShowTrailer && trailerKey !== null;
 
@@ -380,7 +377,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
         {/* Layer 1: Static Backdrop Images (Strictly clipped inside rounded hero container) */}
         <div className="absolute inset-0 w-full h-full z-10 pointer-events-none overflow-hidden rounded-[inherit]">
           {items.map((item, idx) => {
-            const isActive = idx === activeIndex;
+            const isActive = idx === safeIndex;
             const isVisible = isActive && !isTrailerVisible;
             return (
               <img 
@@ -404,26 +401,27 @@ export default function Hero({ items, isActive = true }: HeroProps) {
         <div className="relative w-full z-30 flex flex-col justify-end">
           
           {/* Left Information Stack: Logo -> Metadata -> Description -> Buttons */}
-          <div key={activeItem.id} className="animate-fade-in flex flex-col space-y-3.5 sm:space-y-4 max-w-md sm:max-w-lg md:max-w-xl transition-all duration-700 ease-in-out">
+          <div key={activeItem.id} className="animate-fade-in flex flex-col space-y-3.5 sm:space-y-4 max-w-md sm:max-w-lg md:max-w-xl">
             
             {/* 1. HD Clear Logo (Middle/Lower-Middle Left, Preserve Aspect Ratio & Fallback) */}
-            {logoUrl ? (
-              <div className={`flex items-end transition-all duration-700 ease-in-out origin-bottom-left ${
+            {currentLogo ? (
+              <div className={`flex items-end origin-bottom-left transition-[transform,height] duration-700 ease-in-out ${
                 isTrailerVisible 
                   ? 'h-14 sm:h-20 md:h-24 lg:h-28 scale-[0.92]' 
                   : 'h-16 sm:h-24 md:h-32 lg:h-36 scale-100'
               }`}>
                 <img 
-                  src={logoUrl} 
+                  key={currentLogo}
+                  src={currentLogo} 
                   alt={activeTitle} 
-                  className="max-h-full max-w-[240px] sm:max-w-[340px] md:max-w-[420px] object-contain object-left select-none filter drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)] transition-all duration-700 ease-in-out"
+                  className="max-h-full max-w-[240px] sm:max-w-[340px] md:max-w-[420px] object-contain object-left select-none filter drop-shadow-[0_4px_16px_rgba(0,0,0,0.9)]"
                   loading="eager"
                   decoding="async"
                   fetchPriority="high"
                 />
               </div>
             ) : (
-              <h1 className={`font-black text-white tracking-tight uppercase leading-none drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)] transition-all duration-700 ease-in-out origin-bottom-left ${
+              <h1 className={`font-black text-white tracking-tight uppercase leading-none drop-shadow-[0_4px_14px_rgba(0,0,0,0.9)] origin-bottom-left transition-[transform,font-size] duration-700 ease-in-out ${
                 isTrailerVisible 
                   ? 'text-2xl sm:text-4xl md:text-5xl scale-[0.92]' 
                   : 'text-3xl sm:text-5xl md:text-6xl scale-100'
@@ -434,7 +432,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
 
             {/* 2. Metadata Row Immediately Below Logo (Unboxed Text with Bullet Separators) */}
             {metadataItems.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-white/90 drop-shadow-md transition-all duration-500 ease-in-out">
+              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-white/90 drop-shadow-md">
                 {metadataItems.map((meta, i) => (
                   <React.Fragment key={i}>
                     <span>{meta}</span>
@@ -448,7 +446,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
 
             {/* 3. Description Below Metadata (Faintly fades out and collapses when trailer plays) */}
             {description && (
-              <p className={`text-xs sm:text-sm md:text-[15px] text-white/85 leading-relaxed max-w-md md:max-w-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-normal transition-all duration-700 ease-in-out overflow-hidden ${
+              <p className={`text-xs sm:text-sm md:text-[15px] text-white/85 leading-relaxed max-w-md md:max-w-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-normal overflow-hidden transition-[opacity,max-height,transform,margin] duration-700 ease-in-out ${
                 isTrailerVisible 
                   ? 'opacity-0 max-h-0 -translate-y-2 pointer-events-none -my-1.5' 
                   : 'opacity-100 max-h-28 line-clamp-3 translate-y-0 my-0'
@@ -458,11 +456,11 @@ export default function Hero({ items, isActive = true }: HeroProps) {
             )}
 
             {/* 4. Pill Action Buttons (Play & More Info matching Netflix reference) */}
-            <div className="flex items-center gap-3 pt-1 transition-all duration-500 ease-in-out">
+            <div className="flex items-center gap-3 pt-1">
               <button 
                 type="button"
                 onClick={handlePlay}
-                className="bg-white hover:bg-white/90 active:scale-95 text-black px-6 sm:px-7 py-2.5 rounded-full font-bold text-sm sm:text-base flex items-center gap-2 transition-all shadow-[0_4px_12px_rgba(0,0,0,0.5)] cursor-pointer"
+                className="bg-white hover:bg-white/90 active:scale-95 text-black px-6 sm:px-7 py-2.5 rounded-full font-bold text-sm sm:text-base flex items-center gap-2 transition-transform shadow-[0_4px_12px_rgba(0,0,0,0.5)] cursor-pointer"
               >
                 <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current text-black" />
                 <span>Play</span>
@@ -470,7 +468,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
               <button 
                 type="button"
                 onClick={handleMoreInfo}
-                className="bg-white/15 hover:bg-white/25 active:scale-95 text-white border border-white/15 px-6 sm:px-7 py-2.5 rounded-full font-semibold text-sm sm:text-base flex items-center gap-2 transition-all backdrop-blur-md shadow-md cursor-pointer"
+                className="bg-white/15 hover:bg-white/25 active:scale-95 text-white border border-white/15 px-6 sm:px-7 py-2.5 rounded-full font-semibold text-sm sm:text-base flex items-center gap-2 transition-colors backdrop-blur-md shadow-md cursor-pointer"
               >
                 <Info className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span>More Info</span>
@@ -484,7 +482,7 @@ export default function Hero({ items, isActive = true }: HeroProps) {
         {/* Hero Bottom Completion Timer Bar */}
         <div className="absolute inset-x-0 bottom-0 h-[3px] bg-white/15 z-30 overflow-hidden pointer-events-none">
           <div
-            key={activeIndex}
+            key={safeIndex}
             className="h-full bg-white w-full animate-progress"
             style={{ animationDuration: '30s' }}
           />
