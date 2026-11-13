@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import Landing from './pages/Landing';
-import Home, { preloadHomeData, markHomeRevealShown } from './pages/Home';
+import Home, { preloadHomeData, markHomeRevealShown, isHomeRevealShown } from './pages/Home';
 import WatchPage from './pages/WatchPage';
 import PlayerPage from './pages/PlayerPage';
 import BrowsePage from './pages/BrowsePage';
@@ -66,6 +66,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   const [mountHome, setMountHome] = React.useState(() => location.pathname !== '/');
+  const shouldMountHome = mountHome || location.pathname !== '/';
+  const [, setRevealTick] = React.useState(0);
+  const handleSplashFinish = React.useCallback(() => {
+    setRevealTick((t) => t + 1);
+  }, []);
 
   React.useEffect(() => {
     if (location.pathname !== '/' && !mountHome) {
@@ -73,9 +78,11 @@ function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [location.pathname, mountHome]);
 
+  const isSplashActive = location.pathname === '/home' && !isHomeRevealShown();
+
   return (
     <div className="min-h-screen bg-black text-white flex flex-col relative overflow-x-hidden">
-      <Sidebar />
+      <Sidebar hiddenBySplash={isSplashActive} />
       <div
         className={`flex-1 min-w-0 ${
           !isImmersive
@@ -84,8 +91,13 @@ function AppLayout({ children }: { children: React.ReactNode }) {
         }`}
       >
         {!isHomeScreen && children}
-        {mountHome && (
-          <Home key={lastFilterRef.current || 'home'} typeFilter={lastFilterRef.current} isActive={isHomeScreen} />
+        {shouldMountHome && (
+          <Home
+            key={lastFilterRef.current || 'home'}
+            typeFilter={lastFilterRef.current}
+            isActive={isHomeScreen}
+            onSplashFinish={handleSplashFinish}
+          />
         )}
       </div>
     </div>

@@ -420,21 +420,21 @@ const LazyRail = React.memo(function LazyRail({ title, railKey, isTop10 = false,
   );
 });
 
-let hasShownHomeReveal = typeof window !== 'undefined' && sessionStorage.getItem('miyoro_has_shown_reveal') === 'true';
+let hasShownHomeReveal = false;
+
+export const isHomeRevealShown = () => hasShownHomeReveal;
 
 export const markHomeRevealShown = () => {
   hasShownHomeReveal = true;
-  try {
-    sessionStorage.setItem('miyoro_has_shown_reveal', 'true');
-  } catch (e) {}
 };
 
 interface HomeProps {
   typeFilter?: 'shows' | 'movies' | 'anime' | 'sports' | 'sparks' | 'categories';
   isActive?: boolean;
+  onSplashFinish?: () => void;
 }
 
-export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
+export default function Home({ typeFilter, isActive = true, onSplashFinish }: HomeProps = {}) {
   // Only ever show LogoReveal on initial cold landing directly on /home if never seen in session
   const isHomeVisit = isActive && (!typeFilter || window.location.pathname === '/home');
   const shouldReveal = isHomeVisit && !hasShownHomeReveal;
@@ -458,6 +458,7 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
   const handleRevealDone = () => {
     if (homeReadyRef.current) {
       markHomeRevealShown();
+      onSplashFinish?.();
       setOverlayFading(true);
       setTimeout(() => {
         setShowOverlay(false);
@@ -472,6 +473,7 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
 
     const safetyTimer = setTimeout(() => {
       markHomeRevealShown();
+      onSplashFinish?.();
       setShowOverlay(false);
       if (!homeReadyRef.current) {
         setLoadError(true);
@@ -479,7 +481,7 @@ export default function Home({ typeFilter, isActive = true }: HomeProps = {}) {
     }, 3000);
 
     return () => clearTimeout(safetyTimer);
-  }, [showOverlay]);
+  }, [showOverlay, onSplashFinish]);
 
   const loadInitial = useCallback(() => {
     if (cachedInitialBatch) {

@@ -844,11 +844,11 @@ export const fetchProviderLogos = async () => {
   }
 };
 
-export const fetchByProvider = async (providerId: number) => {
-  const cacheKey = `provider_movie_${providerId}`;
+export const fetchByProvider = async (providerId: number, page: number = 1) => {
+  const cacheKey = `provider_movie_${providerId}_p${page}`;
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   try {
-    const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
+    const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=${page}&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
     const data = await res.json();
     if (data && data.results) {
@@ -864,11 +864,11 @@ export const fetchByProvider = async (providerId: number) => {
   }
 };
 
-export const fetchTVByProvider = async (providerId: number) => {
-  const cacheKey = `provider_tv_${providerId}`;
+export const fetchTVByProvider = async (providerId: number, page: number = 1) => {
+  const cacheKey = `provider_tv_${providerId}_p${page}`;
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   try {
-    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
+    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=${page}&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
     if (!res.ok) throw new Error('Not OK');
     const data = await res.json();
     if (data && data.results) {

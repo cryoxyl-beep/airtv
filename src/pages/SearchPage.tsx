@@ -36,6 +36,26 @@ export default function SearchPage() {
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+  const [categoryWarning, setCategoryWarning] = useState(false);
+  const warningTimerRef = useRef<number | null>(null);
+
+  const triggerCategoryWarning = () => {
+    setCategoryWarning(true);
+    if (warningTimerRef.current !== null) {
+      window.clearTimeout(warningTimerRef.current);
+    }
+    warningTimerRef.current = window.setTimeout(() => {
+      setCategoryWarning(false);
+    }, 2200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (warningTimerRef.current !== null) {
+        window.clearTimeout(warningTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -48,7 +68,7 @@ export default function SearchPage() {
     };
   }, []);
 
-  // Keyboard shortcut listener: press '/' to focus search bar
+  // Keyboard shortcut listener: press '/' to focus search bar (or prompt category selection)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -57,12 +77,16 @@ export default function SearchPage() {
         document.activeElement?.tagName !== 'TEXTAREA'
       ) {
         e.preventDefault();
-        inputRef.current?.focus();
+        if (!filter) {
+          triggerCategoryWarning();
+        } else {
+          inputRef.current?.focus();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [filter]);
 
   // Sync inputVal when URL query changes
   useEffect(() => {
@@ -106,10 +130,10 @@ export default function SearchPage() {
     };
   }, []);
 
-  // Fetch search results when query or filter changes
+  // Fetch search results when query or filter changes (category is mandatory)
   useEffect(() => {
     const fetchResults = async () => {
-      if (!query.trim()) {
+      if (!filter || !query.trim()) {
         setResults([]);
         setLoading(false);
         return;
@@ -128,27 +152,6 @@ export default function SearchPage() {
         } else if (filter === 'anime') {
           const data = await searchAnime(query);
           setResults(data.results || []);
-        } else {
-          const [movies, tv, anime] = await Promise.all([
-            searchMovies(query),
-            searchTV(query),
-            searchAnime(query),
-          ]);
-
-          const maxLength = Math.max(
-            movies.results?.length || 0,
-            tv.results?.length || 0,
-            anime.results?.length || 0
-          );
-
-          const interleaved = [];
-          for (let i = 0; i < maxLength; i++) {
-            if (movies.results && movies.results[i]) interleaved.push(movies.results[i]);
-            if (tv.results && tv.results[i]) interleaved.push(tv.results[i]);
-            if (anime.results && anime.results[i]) interleaved.push(anime.results[i]);
-          }
-
-          setResults(interleaved);
         }
       } catch (e) {
         console.error('Search failed', e);
@@ -163,22 +166,24 @@ export default function SearchPage() {
 
   // Debounced input change for instant search with skeleton feedback
   useEffect(() => {
+    if (!filter) return;
     if (inputVal === query) return;
 
     if (!inputVal.trim()) {
-      navigate(`/search?q=${filter ? `&filter=${filter}` : ''}`, { replace: true });
+      navigate(`/search?filter=${filter}`, { replace: true });
       return;
     }
 
     setLoading(true);
     const timer = setTimeout(() => {
-      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}${filter ? `&filter=${filter}` : ''}`, { replace: true });
+      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${filter}`, { replace: true });
     }, 350);
 
     return () => clearTimeout(timer);
   }, [inputVal, query, filter, navigate]);
 
   const handleRetrySearch = async () => {
+    if (!filter || !query.trim()) return;
     setIsRetryingSearch(true);
     setSearchError(false);
     setLoading(true);
@@ -192,24 +197,6 @@ export default function SearchPage() {
       } else if (filter === 'anime') {
         const data = await searchAnime(query);
         setResults(data.results || []);
-      } else {
-        const [movies, tv, anime] = await Promise.all([
-          searchMovies(query),
-          searchTV(query),
-          searchAnime(query),
-        ]);
-        const maxLength = Math.max(
-          movies.results?.length || 0,
-          tv.results?.length || 0,
-          anime.results?.length || 0
-        );
-        const interleaved = [];
-        for (let i = 0; i < maxLength; i++) {
-          if (movies.results && movies.results[i]) interleaved.push(movies.results[i]);
-          if (tv.results && tv.results[i]) interleaved.push(tv.results[i]);
-          if (anime.results && anime.results[i]) interleaved.push(anime.results[i]);
-        }
-        setResults(interleaved);
       }
     } catch (e) {
       setSearchError(true);
@@ -221,18 +208,38 @@ export default function SearchPage() {
 
   const handleFilterClick = (clickedFilter: 'movies' | 'series' | 'anime') => {
     const nextFilter = filter === clickedFilter ? '' : clickedFilter;
-    setLoading(true);
-    const queryPart = inputVal.trim() ? `q=${encodeURIComponent(inputVal.trim())}` : 'q=';
-    const filterPart = nextFilter ? `&filter=${nextFilter}` : '';
-    navigate(`/search?${queryPart}${filterPart}`);
+    setCategoryWarning(false);
+
+    if (!nextFilter) {
+      setInputVal('');
+      setResults([]);
+      setLoading(false);
+      navigate('/search');
+      return;
+    }
+
+    if (inputVal.trim()) {
+      setLoading(true);
+      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${nextFilter}`);
+    } else {
+      setLoading(false);
+      navigate(`/search?filter=${nextFilter}`);
+    }
+
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!filter) {
+      triggerCategoryWarning();
+      return;
+    }
     if (inputVal.trim()) {
       setLoading(true);
-      const filterPart = filter ? `&filter=${filter}` : '';
-      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}${filterPart}`);
+      navigate(`/search?q=${encodeURIComponent(inputVal.trim())}&filter=${filter}`);
     }
   };
 
@@ -304,7 +311,7 @@ export default function SearchPage() {
     return true;
   });
 
-  const isSearching = Boolean(query.trim());
+  const isSearching = Boolean(filter && query.trim());
   const activeList = isSearching ? results : filteredTrending;
   const isLoading = isSearching ? loading : loadingTrending;
 
@@ -314,35 +321,76 @@ export default function SearchPage() {
     { id: 'anime', label: 'Anime', icon: AnimeIcon },
   ];
 
+  const searchPlaceholder =
+    filter === 'movies'
+      ? 'Search movies...'
+      : filter === 'series'
+      ? 'Search TV shows...'
+      : filter === 'anime'
+      ? 'Search anime...'
+      : 'Select a category below to start searching...';
+
   return (
     <div className="min-h-screen bg-black pt-6 sm:pt-10 px-4 sm:px-8 lg:px-12 pb-24 font-sans text-white select-none">
       <div className="max-w-[1450px] mx-auto space-y-6 sm:space-y-7">
-        {/* 1. Sleek Search Bar UI */}
+        {/* 1. Sleek Search Bar UI (Category selection required before typing) */}
         <form onSubmit={handleSearchSubmit} className="relative w-full">
-          <div className="relative flex items-center h-14 sm:h-15 px-5 bg-[#121318]/90 backdrop-blur-xl border border-white/12 focus-within:border-white/30 focus-within:ring-2 focus-within:ring-white/10 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 group">
-            <Search className="w-5 h-5 text-white/45 group-focus-within:text-white transition-colors shrink-0 mr-3.5" />
+          <div
+            onClick={() => {
+              if (!filter) {
+                triggerCategoryWarning();
+              }
+            }}
+            className={`relative flex items-center h-14 sm:h-15 px-5 bg-[#121318]/90 backdrop-blur-xl border rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.6)] transition-all duration-300 group ${
+              !filter
+                ? 'border-white/10 opacity-75 cursor-not-allowed'
+                : 'border-white/12 focus-within:border-white/30 focus-within:ring-2 focus-within:ring-white/10'
+            }`}
+          >
+            <Search
+              className={`w-5 h-5 shrink-0 mr-3.5 transition-colors ${
+                !filter
+                  ? 'text-white/30'
+                  : 'text-white/45 group-focus-within:text-white'
+              }`}
+            />
             <input
               ref={inputRef}
               type="text"
               value={inputVal}
+              readOnly={!filter}
+              aria-disabled={!filter}
               onChange={(e) => {
+                if (!filter) {
+                  triggerCategoryWarning();
+                  return;
+                }
                 setInputVal(e.target.value);
               }}
               onKeyDown={(e) => {
+                if (!filter) {
+                  if (e.key !== 'Tab') {
+                    e.preventDefault();
+                    triggerCategoryWarning();
+                  }
+                  return;
+                }
                 if (e.key === 'Enter') {
                   handleSearchSubmit(e);
                 }
               }}
-              placeholder="Search movies, TV shows, anime..."
-              className="w-full bg-transparent text-base sm:text-lg text-white placeholder:text-white/35 outline-none font-medium tracking-wide"
-              autoFocus
+              placeholder={searchPlaceholder}
+              className={`w-full bg-transparent text-base sm:text-lg text-white placeholder:text-white/35 outline-none font-medium tracking-wide ${
+                !filter ? 'cursor-not-allowed' : ''
+              }`}
+              autoFocus={Boolean(filter)}
             />
-            {inputVal ? (
+            {inputVal && filter ? (
               <button
                 type="button"
                 onClick={() => {
                   setInputVal('');
-                  navigate(`/search?q=${filter ? `&filter=${filter}` : ''}`);
+                  navigate(`/search?filter=${filter}`);
                   inputRef.current?.focus();
                 }}
                 className="p-1.5 rounded-full hover:bg-white/15 text-white/50 hover:text-white transition-all cursor-pointer active:scale-90"
@@ -358,7 +406,7 @@ export default function SearchPage() {
           </div>
         </form>
 
-        {/* 2. Filter Pills Bar (No "All" button, none selected by default) */}
+        {/* 2. Mandatory Category Filter Pills Bar */}
         <div className="flex flex-wrap items-center gap-2.5">
           {FILTER_TABS.map((tab) => {
             const Icon = tab.icon;
@@ -371,6 +419,8 @@ export default function SearchPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer active:scale-95 ${
                   isActive
                     ? 'bg-[#1C1D24] border border-white/25 text-white shadow-md'
+                    : categoryWarning
+                    ? 'text-white bg-white/12 border border-white/45 ring-2 ring-white/20 shadow-[0_0_16px_rgba(255,255,255,0.12)]'
                     : 'text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/5'
                 }`}
               >
@@ -379,6 +429,15 @@ export default function SearchPage() {
               </button>
             );
           })}
+          {!filter && (
+            <span
+              className={`ml-1 text-xs sm:text-sm font-medium transition-colors duration-200 ${
+                categoryWarning ? 'text-white' : 'text-white/45'
+              }`}
+            >
+              Select a category to search
+            </span>
+          )}
         </div>
 
         {/* 3. Section Header: "Maybe these ?" / Search Results */}

@@ -9,14 +9,14 @@ import {
 } from './MiyoroIcons';
 import { preloadHomeData, markHomeRevealShown } from '../pages/Home';
 
-export default function Sidebar() {
+export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: boolean } = {}) {
   const [isExpanded, setIsExpanded] = useState(false);
   const leaveTimerRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Hide sidebar on landing splash page and full-screen immersive video player pages (/play/...)
-  const isHidden = location.pathname === '/' || location.pathname.startsWith('/play/');
+  // Hide sidebar on landing splash page, during LogoReveal splash overlay, and full-screen immersive video player pages (/play/...)
+  const isHidden = hiddenBySplash || location.pathname === '/' || location.pathname.startsWith('/play/');
   if (isHidden) return null;
 
   // Detect Movie, TV Series, and Anime watch pages for Transparent Immersive Mode
