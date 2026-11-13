@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import { fetchTop10, IMAGE_BASE_URL_W500, fetchTrending, preloadImageUrls } from '../api/tmdb';
 import { fetchTrendingAnime } from '../api/anilist';
 import { preloadHomeData } from './Home';
-import { ChevronRight, User } from 'lucide-react';
+import { User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { LoadingButton } from '../components/MiyoroSpinner';
+import { MiyoroSpinner } from '../components/MiyoroSpinner';
+import { MiyoroWordmark } from '../components/MiyoroWordmark';
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -17,43 +18,54 @@ const GoogleIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const GuestSmileAvatar = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <circle cx="34" cy="46" r="6.5" fill="currentColor" />
+    <circle cx="86" cy="46" r="6.5" fill="currentColor" />
+    <path
+      d="M42 71C51 82 71 83 84 69"
+      stroke="currentColor"
+      strokeWidth="7.5"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const CinematicPosterWall = ({ posters }: { posters: any[] }) => {
   const prefersReducedMotion = useReducedMotion();
-  
-  // Split posters into 4 columns
+
   const cols = [[], [], [], []] as any[][];
   posters.forEach((p, i) => cols[i % 4].push(p));
 
-  // Speeds for parallax effect
-  const durations = [45, 60, 50, 65]; 
+  const durations = [45, 60, 50, 65];
   const directions = [
-    ['0%', '-50%'], // Up
-    ['-50%', '0%'], // Down
-    ['0%', '-50%'], // Up
-    ['-50%', '0%'], // Down
+    ['0%', '-50%'],
+    ['-50%', '0%'],
+    ['0%', '-50%'],
+    ['-50%', '0%'],
   ];
 
   return (
-    <div className="absolute inset-0 w-full h-[130vh] -top-[15vh] overflow-hidden bg-black flex gap-3 md:gap-4 lg:gap-6 px-2 md:px-4 lg:px-8 opacity-50 md:opacity-70 pointer-events-none transform -skew-y-6 scale-[1.15]">
+    <div className="absolute inset-0 w-full h-[130vh] -top-[15vh] overflow-hidden bg-black flex gap-3 md:gap-4 lg:gap-6 px-2 md:px-4 lg:px-8 opacity-45 md:opacity-55 pointer-events-none transform -skew-y-6 scale-[1.15]">
       {cols.map((col, i) => {
-        const duplicatedCol = [...col, ...col]; // Duplicate for seamless loop
+        const duplicatedCol = [...col, ...col];
         return (
           <div key={i} className={`flex-1 flex flex-col gap-3 md:gap-4 lg:gap-6 ${i > 1 ? 'hidden md:flex' : ''} ${i > 2 ? 'hidden lg:flex' : ''}`}>
-            <motion.div 
+            <motion.div
               className="flex flex-col gap-3 md:gap-4 lg:gap-6"
               animate={prefersReducedMotion ? {} : { y: directions[i] as any }}
               transition={{
                 repeat: Infinity,
-                ease: "linear",
-                duration: durations[i]
+                ease: 'linear',
+                duration: durations[i],
               }}
             >
               {duplicatedCol.map((poster, idx) => (
-                <div key={idx} className="w-full relative rounded-xl md:rounded-2xl overflow-hidden aspect-[2/3] shadow-2xl transition-all duration-700">
+                <div key={idx} className="w-full relative rounded-xl md:rounded-2xl overflow-hidden aspect-[2/3] shadow-2xl">
                   {poster.poster_path ? (
-                    <img 
-                      src={poster.poster_path.startsWith('http') ? poster.poster_path : `${IMAGE_BASE_URL_W500}${poster.poster_path}`} 
-                      alt={poster.title || 'Poster'} 
+                    <img
+                      src={poster.poster_path.startsWith('http') ? poster.poster_path : `${IMAGE_BASE_URL_W500}${poster.poster_path}`}
+                      alt={poster.title || 'Poster'}
                       className="w-full h-full object-cover"
                       loading="eager"
                       decoding="async"
@@ -61,18 +73,13 @@ const CinematicPosterWall = ({ posters }: { posters: any[] }) => {
                   ) : (
                     <div className="w-full h-full bg-white/5" />
                   )}
-                  {/* Subtle darkening on the posters themselves */}
-                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/0 transition-colors duration-500" />
+                  <div className="absolute inset-0 bg-black/30" />
                 </div>
               ))}
             </motion.div>
           </div>
         );
       })}
-      
-      {/* Overlays to blend into the right panel */}
-      <div className="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-transparent via-black/80 to-black w-full" />
-      <div className="absolute inset-0 bg-black/20" />
     </div>
   );
 };
@@ -93,35 +100,33 @@ export default function Landing() {
         const [trendingRes, animeRes, moviesRes] = await Promise.all([
           fetchTop10(),
           fetchTrendingAnime(20, true),
-          fetchTrending()
+          fetchTrending(),
         ]);
-        
+
         const mixed = [
           ...(trendingRes.results || []),
           ...(animeRes.results || []),
-          ...(moviesRes.results || [])
-        ].filter(p => p.poster_path);
-        
+          ...(moviesRes.results || []),
+        ].filter((p) => p.poster_path);
+
         for (let i = mixed.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [mixed[i], mixed[j]] = [mixed[j], mixed[i]];
         }
-        
-        const uniquePosters = mixed.filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i).slice(0, 40);
+
+        const uniquePosters = mixed.filter((v, i, a) => a.findIndex((t) => t.id === v.id) === i).slice(0, 40);
         if (mounted) {
           setWallPosters(uniquePosters);
         }
 
-        // Preload first 16 wall poster image bytes into browser cache
-        const posterUrls = uniquePosters.slice(0, 16).map(p =>
+        const posterUrls = uniquePosters.slice(0, 16).map((p) =>
           p.poster_path.startsWith('http') ? p.poster_path : `${IMAGE_BASE_URL_W500}${p.poster_path}`
         );
         await preloadImageUrls(posterUrls, 550);
 
-        // Warm up the entire Home screen metadata & visual assets in the background!
         preloadHomeData().catch(() => {});
       } catch (err) {
-        console.error("Error loading landing data:", err);
+        console.error('Error loading landing data:', err);
       }
     };
     loadLandingData();
@@ -134,7 +139,7 @@ export default function Landing() {
   const handleGoogleLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (isSigningIn) return;
-    
+
     setIsSigningIn(true);
     setAuthError('');
     try {
@@ -151,95 +156,146 @@ export default function Landing() {
   };
 
   return (
-    <div className="h-screen bg-black font-sans w-[100vw] overflow-hidden relative selection:bg-white/30">
-      {/* Hero Section */}
-      <section className="relative w-full h-full flex items-center">
+    <div className="h-screen bg-black font-sans w-full overflow-hidden relative selection:bg-white/30 select-none">
+      <section className="relative w-full h-full flex items-center justify-center">
         {/* Background Wall */}
         {wallPosters.length > 0 && <CinematicPosterWall posters={wallPosters} />}
 
-        {/* Foreground Panel */}
-        <div className="absolute right-0 bottom-0 md:top-0 w-full md:w-[45%] lg:w-[40%] h-[70%] md:h-full flex flex-col justify-end md:justify-center px-8 md:px-16 lg:px-24 pb-16 md:pb-0 z-20">
-          
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1, delay: 0.2 }}
-            className="mb-12"
-          >
-            <h1 className="text-white text-7xl md:text-8xl lg:text-[7rem] font-black lowercase tracking-tighter drop-shadow-2xl leading-none mb-6 md:mb-8">
-              miyoro
-            </h1>
-            <div className="mt-4 space-y-1">
-              <p className="text-white text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight">Watch.</p>
-              <p className="text-white/80 text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight">Whatever.</p>
-              <p className="text-white/60 text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight">You Want.</p>
-            </div>
-          </motion.div>
+        {/* Balanced Cinema Vignette Scrims */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-b from-black/75 via-black/45 to-black/90"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(ellipse_62%_58%_at_50%_48%,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.4)_65%,rgba(0,0,0,0.8)_100%)]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-10 bg-gradient-to-tr from-black/85 via-transparent to-transparent"
+        />
 
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.5 }}
-            className="w-full max-w-sm flex flex-col gap-8 border-t border-white/10 pt-8 mt-4"
-          >
-            {/* Account / Login Area */}
+        {/* Top-Left Brand Lockup */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.75, delay: 0.08 }}
+          className="absolute top-6 left-6 sm:top-8 sm:left-10 lg:top-10 lg:left-12 z-20 pointer-events-none"
+        >
+          <h1 className="sr-only">Miyoro — Watch. Whatever. You Want.</h1>
+          <MiyoroWordmark
+            variant="lockup"
+            height={44}
+            className="w-[155px] sm:w-[185px] lg:w-[210px] h-auto max-w-full text-white drop-shadow-[0_6px_22px_rgba(0,0,0,0.9)]"
+          />
+        </motion.div>
+
+        {/* Bottom-Left Editorial Tagline */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.85, delay: 0.25 }}
+          className="absolute bottom-6 left-6 sm:bottom-9 sm:left-10 lg:bottom-11 lg:left-12 z-20 pointer-events-none"
+        >
+          <div className="space-y-0.5 sm:space-y-1">
+            <p className="text-white text-2xl sm:text-3xl lg:text-[2.15rem] font-bold tracking-tight leading-[1.08] drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)]">
+              Watch.
+            </p>
+            <p className="text-white/75 text-2xl sm:text-3xl lg:text-[2.15rem] font-bold tracking-tight leading-[1.08] drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)]">
+              Whatever.
+            </p>
+            <p className="text-white/45 text-2xl sm:text-3xl lg:text-[2.15rem] font-bold tracking-tight leading-[1.08] drop-shadow-[0_4px_18px_rgba(0,0,0,0.95)]">
+              You Want.
+            </p>
+          </div>
+        </motion.div>
+
+        {/* Center Netflix-Style Profile Selection */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.75, delay: 0.16 }}
+          className="relative z-20 flex flex-col items-center justify-center px-6 pb-28 sm:pb-24 md:pb-4"
+        >
+          <h2 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-[2.65rem] font-semibold tracking-tight mb-7 sm:mb-10 text-center drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
+            Who&apos;s watching?
+          </h2>
+
+          <div className="flex flex-wrap items-start justify-center gap-6 sm:gap-10 md:gap-12">
+            {/* Tile 1: Signed-in User OR Sign in with Google */}
             {currentUser ? (
-              <div 
+              <button
+                type="button"
                 onClick={() => navigate('/home')}
-                className="flex items-center gap-4 group cursor-pointer w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:translate-x-2"
+                className="group flex flex-col items-center cursor-pointer focus:outline-none"
               >
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-white/40 transition-colors shadow-lg">
+                <div className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-[#232630] to-[#121319] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
                   {currentUser.photoURL ? (
-                    <img src={currentUser.photoURL} alt={currentUser.displayName || 'User'} className="w-full h-full object-cover" />
+                    <img
+                      src={currentUser.photoURL}
+                      alt={currentUser.displayName || 'User'}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <User className="w-5 h-5 text-white/70 group-hover:text-white" />
+                    <User className="w-12 h-12 sm:w-14 sm:h-14 text-white/80 group-hover:text-white transition-colors" />
                   )}
                 </div>
-                <div>
-                  <h3 className="text-white font-medium text-lg tracking-wide">{currentUser.displayName || 'User'}</h3>
-                  <p className="text-white/50 text-sm group-hover:text-white transition-colors flex items-center gap-1">
-                    Continue into Miyoro <ChevronRight className="w-3 h-3 transform group-hover:translate-x-0.5 transition-transform" />
-                  </p>
-                </div>
-              </div>
+                <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors max-w-[140px] sm:max-w-[160px] truncate text-center">
+                  {currentUser.displayName || 'Continue'}
+                </span>
+              </button>
             ) : (
-              <div className="flex flex-col gap-2">
-                <LoadingButton 
-                  loading={isSigningIn}
-                  onClick={handleGoogleLogin}
-                  className={`text-left group flex flex-col gap-1 w-max p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-out hover:translate-x-1 ${isSigningIn ? 'opacity-70 cursor-wait' : ''}`}
-                >
-                  <span className="text-white text-xl md:text-2xl font-semibold tracking-wide flex items-center gap-3">
-                    <GoogleIcon className={`w-6 h-6 ${!isSigningIn && 'group-hover:scale-110'} transition-transform duration-300`} />
-                    <span>{isSigningIn ? 'Signing in...' : 'Sign in with Google'}</span>
-                  </span>
-                  <div className="h-[2px] w-0 bg-white group-hover:w-full transition-all duration-500 ease-out" />
-                </LoadingButton>
-                {authError && <p className="text-red-400 text-sm ml-1 opacity-90">{authError}</p>}
-              </div>
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isSigningIn}
+                aria-busy={isSigningIn}
+                className={`group flex flex-col items-center focus:outline-none ${
+                  isSigningIn ? 'cursor-wait opacity-85' : 'cursor-pointer'
+                }`}
+              >
+                <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden bg-gradient-to-b from-[#232632] via-[#171922] to-[#0D0E13] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center backdrop-blur-md">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.10)_0%,transparent_70%)] opacity-80 group-hover:opacity-100 transition-opacity"
+                  />
+                  {isSigningIn ? (
+                    <MiyoroSpinner size={44} color="#ffffff" label="Signing in" />
+                  ) : (
+                    <GoogleIcon className="relative z-10 w-11 h-11 sm:w-13 sm:h-13 md:w-14 md:h-14 text-white/90 group-hover:text-white transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_4px_14px_rgba(0,0,0,0.65)]" />
+                  )}
+                </div>
+                <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
+                  {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
+                </span>
+              </button>
             )}
 
-            {/* Guest Entry */}
-            <div 
+            {/* Tile 2: Guest Profile */}
+            <button
+              type="button"
               onClick={() => navigate('/home')}
-              className="flex items-center gap-4 group cursor-pointer w-max mt-2 p-3 -ml-3 rounded-2xl hover:bg-white/5 transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1.2)] hover:translate-x-2"
+              className="group flex flex-col items-center cursor-pointer focus:outline-none"
             >
-              <div className="w-12 h-12 rounded-full bg-[#141414] flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-white/40 transition-all duration-300 shadow-xl">
-                <img 
-                  src="https://api.dicebear.com/9.x/lorelei/svg?seed=Miyoro&backgroundColor=transparent" 
-                  alt="Guest" 
-                  className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
+              <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden bg-gradient-to-b from-[#2F4773] via-[#1E2E4D] to-[#111B2E] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(255,255,255,0.14)_0%,transparent_72%)] opacity-75 group-hover:opacity-100 transition-opacity"
                 />
+                <GuestSmileAvatar className="relative z-10 w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 text-white/95 group-hover:text-white transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_4px_14px_rgba(0,0,0,0.45)]" />
               </div>
-              <div className="flex flex-col">
-                <h3 className="text-white/90 font-medium text-lg tracking-wide group-hover:text-white transition-colors">Guest</h3>
-                <p className="text-white/50 text-sm group-hover:text-white/90 transition-colors flex items-center gap-1">
-                  Continue as Guest <ChevronRight className="w-3 h-3 transform group-hover:translate-x-1 transition-transform duration-300" />
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+              <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
+                Guest
+              </span>
+            </button>
+          </div>
+
+          {authError && (
+            <p className="mt-5 text-red-400 text-xs sm:text-sm text-center drop-shadow">
+              {authError}
+            </p>
+          )}
+        </motion.div>
       </section>
     </div>
   );
