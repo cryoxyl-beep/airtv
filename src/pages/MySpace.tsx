@@ -24,7 +24,7 @@ interface WatchItem {
 }
 
 export default function MySpace() {
-  const { currentUser, signInWithGoogle, logout } = useAuth();
+  const { currentUser, activeAvatarSrc, signInWithGoogle, logout } = useAuth();
   const navigate = useNavigate();
   const [continueWatching, setContinueWatching] = useState<WatchItem[]>([]);
   const [libraryItems, setLibraryItems] = useState<string[]>([]);
@@ -115,12 +115,15 @@ export default function MySpace() {
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#141414] via-[#1a1a1a] to-[#121212] border border-white/10 p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
             {/* Avatar */}
-            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden bg-[#242424] border-2 border-white/20 flex items-center justify-center shrink-0 shadow-lg">
-              {currentUser?.photoURL ? (
-                <img src={currentUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-10 h-10 text-white/70" />
-              )}
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-[#242424] border-2 border-white/20 flex items-center justify-center shrink-0 shadow-lg">
+              <img
+                src={activeAvatarSrc}
+                alt={currentUser?.displayName || 'Guest'}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = '/avatars/miyoro.svg';
+                }}
+              />
             </div>
 
             {/* User Info */}

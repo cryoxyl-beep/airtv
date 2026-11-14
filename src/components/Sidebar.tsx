@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   HomeIcon,
@@ -8,16 +8,29 @@ import {
   MoviesIcon,
 } from './MiyoroIcons';
 import { preloadHomeData, markHomeRevealShown } from '../pages/Home';
+import { useAuth } from '../contexts/AuthContext';
+import { getAvatarSrc } from '../config/profileAvatars';
+import ProfileModal from './ProfileModal';
 
 export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: boolean } = {}) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [avatarImgFailed, setAvatarImgFailed] = useState(false);
   const leaveTimerRef = useRef<number | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentUser, activeAvatarSrc } = useAuth();
+
+  useEffect(() => {
+    setAvatarImgFailed(false);
+  }, [activeAvatarSrc]);
 
   // Hide sidebar on landing splash page, during LogoReveal splash overlay, and full-screen immersive video player pages (/play/...)
   const isHidden = hiddenBySplash || location.pathname === '/' || location.pathname.startsWith('/play/');
   if (isHidden) return null;
+
+  const profileImgSrc = avatarImgFailed ? getAvatarSrc('miyoro') : activeAvatarSrc;
+  const profileLabel = currentUser?.displayName || 'Guest';
 
   // Detect Movie, TV Series, and Anime watch pages for Transparent Immersive Mode
   const isWatchPage =
@@ -243,8 +256,54 @@ export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: b
           })}
         </nav>
 
-        {/* Bottom Optical Spacer to keep the items balanced against the top logo */}
-        <div className="w-[88px] h-[72px] shrink-0 pointer-events-none" />
+        {/* Bottom Square Profile Icon (Syncs to Firebase when signed in, localStorage for Guest) */}
+        <div className="w-full pb-7 pt-2 shrink-0 flex items-center">
+          <button
+            type="button"
+            onClick={() => {
+              setIsExpanded(false);
+              setIsProfileOpen(true);
+            }}
+            className="group/profile w-full h-11 flex items-center cursor-pointer text-left focus:outline-none"
+            aria-label="Open Profile"
+            title={profileLabel}
+          >
+            <div className="w-[88px] h-11 flex items-center justify-center shrink-0">
+              <div
+                className={`w-10 h-10 rounded-xl overflow-hidden border transition-all duration-200 bg-[#141418] shadow-[0_4px_14px_rgba(0,0,0,0.65)] ${
+                  isProfileOpen
+                    ? 'border-white scale-105'
+                    : 'border-white/20 group-hover/profile:border-white group-hover/profile:scale-105'
+                }`}
+              >
+                <img
+                  src={profileImgSrc}
+                  alt={profileLabel}
+                  className="w-full h-full object-cover"
+                  onError={() => setAvatarImgFailed(true)}
+                  draggable={false}
+                />
+              </div>
+            </div>
+
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] pr-5 ${
+                isExpanded
+                  ? 'opacity-100 translate-x-0 max-w-[145px]'
+                  : 'opacity-0 -translate-x-2 max-w-0 pointer-events-none'
+              }`}
+            >
+              <div className="flex flex-col">
+                <span className="text-[14px] leading-tight font-medium text-white/85 group-hover/profile:text-white truncate max-w-[125px]">
+                  {profileLabel}
+                </span>
+                <span className="text-[11px] leading-tight text-white/45 group-hover/profile:text-white/70">
+                  {currentUser ? 'Profile' : 'Guest'}
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
       </aside>
 
       {/* ==================================================================== */}
@@ -277,7 +336,33 @@ export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: b
             </button>
           );
         })}
+
+        <button
+          type="button"
+          onClick={() => setIsProfileOpen(true)}
+          className={`flex flex-col items-center justify-center gap-1 py-1 px-2 rounded-lg transition-colors cursor-pointer focus:outline-none ${
+            isProfileOpen ? 'text-white font-semibold' : 'text-white/60 hover:text-white'
+          }`}
+          aria-label="Open Profile"
+        >
+          <div
+            className={`w-6 h-6 rounded-md overflow-hidden border transition-colors ${
+              isProfileOpen ? 'border-white' : 'border-white/25'
+            }`}
+          >
+            <img
+              src={profileImgSrc}
+              alt={profileLabel}
+              className="w-full h-full object-cover"
+              onError={() => setAvatarImgFailed(true)}
+              draggable={false}
+            />
+          </div>
+          <span className="text-[10px] tracking-tight">Profile</span>
+        </button>
       </nav>
+
+      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </>
   );
 }
