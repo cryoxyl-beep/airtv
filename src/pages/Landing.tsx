@@ -217,11 +217,15 @@ export default function Landing() {
                 onClick={() => navigate('/home')}
                 className="group flex flex-col items-center cursor-pointer focus:outline-none"
               >
-                <div className="w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden bg-[#14151C] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
+                <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
                   <img
                     src={userImgFailed ? getAvatarSrc('miyoro') : activeAvatarSrc}
                     alt={currentUser.displayName || 'User'}
-                    className="w-full h-full object-cover"
+                    className={`block w-full h-full object-cover transition-transform duration-300 ${
+                      userImgFailed || activeAvatarSrc.endsWith('.svg')
+                        ? 'scale-[1.07] group-hover:scale-[1.11]'
+                        : 'group-hover:scale-105'
+                    }`}
                     onError={() => setUserImgFailed(true)}
                     draggable={false}
                   />
