@@ -203,13 +203,13 @@ export default function Landing() {
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.75, delay: 0.16 }}
-          className="relative z-20 flex flex-col items-center justify-center px-6 pb-28 sm:pb-24 md:pb-4"
+          className="relative z-20 flex flex-col items-center justify-center px-6 pt-12 pb-16 sm:pt-14 sm:pb-12 md:pt-16 md:pb-0"
         >
-          <h2 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-[2.65rem] font-semibold tracking-tight mb-7 sm:mb-10 text-center drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
+          <h2 className="text-white text-2xl sm:text-3xl md:text-4xl lg:text-[2.35rem] font-semibold tracking-tight mb-6 sm:mb-8 text-center drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
             Who&apos;s watching?
           </h2>
 
-          <div className="flex flex-wrap items-start justify-center gap-6 sm:gap-10 md:gap-12">
+          <div className="flex flex-wrap items-start justify-center gap-5 sm:gap-8 md:gap-10">
             {/* Tile 1: Signed-in User OR Sign in with Google */}
             {currentUser ? (
               <button
@@ -217,7 +217,7 @@ export default function Landing() {
                 onClick={() => navigate('/home')}
                 className="group flex flex-col items-center cursor-pointer focus:outline-none"
               >
-                <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
+                <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
                   <img
                     src={userImgFailed ? getAvatarSrc('miyoro') : activeAvatarSrc}
                     alt={currentUser.displayName || 'User'}
@@ -230,7 +230,7 @@ export default function Landing() {
                     draggable={false}
                   />
                 </div>
-                <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors max-w-[140px] sm:max-w-[160px] truncate text-center">
+                <span className="mt-3 sm:mt-3.5 text-xs sm:text-sm md:text-base font-medium text-white/70 group-hover:text-white transition-colors max-w-[120px] sm:max-w-[140px] truncate text-center">
                   {currentUser.displayName || 'Continue'}
                 </span>
               </button>
@@ -244,18 +244,18 @@ export default function Landing() {
                   isSigningIn ? 'cursor-wait opacity-85' : 'cursor-pointer'
                 }`}
               >
-                <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden bg-gradient-to-b from-[#232632] via-[#171922] to-[#0D0E13] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center backdrop-blur-md">
+                <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden bg-gradient-to-b from-[#232632] via-[#171922] to-[#0D0E13] border-2 border-white/15 ring-1 ring-inset ring-white/10 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center backdrop-blur-md">
                   <div
                     aria-hidden="true"
                     className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.10)_0%,transparent_70%)] opacity-80 group-hover:opacity-100 transition-opacity"
                   />
                   {isSigningIn ? (
-                    <MiyoroSpinner size={44} color="#ffffff" label="Signing in" />
+                    <MiyoroSpinner size={38} color="#ffffff" label="Signing in" />
                   ) : (
-                    <GoogleIcon className="relative z-10 w-11 h-11 sm:w-13 sm:h-13 md:w-14 md:h-14 text-white/90 group-hover:text-white transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_4px_14px_rgba(0,0,0,0.65)]" />
+                    <GoogleIcon className="relative z-10 w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 text-white/90 group-hover:text-white transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_4px_14px_rgba(0,0,0,0.65)]" />
                   )}
                 </div>
-                <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
+                <span className="mt-3 sm:mt-3.5 text-xs sm:text-sm md:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
                   {isSigningIn ? 'Signing in...' : 'Sign in with Google'}
                 </span>
               </button>
@@ -267,7 +267,7 @@ export default function Landing() {
               onClick={() => navigate('/home')}
               className="group flex flex-col items-center cursor-pointer focus:outline-none"
             >
-              <div className="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
+              <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
                 <img
                   src={guestAvatarSrc}
                   alt="Guest"
@@ -275,7 +275,7 @@ export default function Landing() {
                   draggable={false}
                 />
               </div>
-              <span className="mt-3.5 sm:mt-4 text-sm sm:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
+              <span className="mt-3 sm:mt-3.5 text-xs sm:text-sm md:text-base font-medium text-white/70 group-hover:text-white transition-colors text-center">
                 Guest
               </span>
             </button>
