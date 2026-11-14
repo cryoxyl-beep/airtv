@@ -75,7 +75,14 @@ export default function Landing() {
   const navigate = useNavigate();
   const [wallPosters, setWallPosters] = useState<any[]>([]);
 
-  const { currentUser, guestAvatarSrc, activeAvatarSrc, signInWithGoogle } = useAuth();
+  const {
+    signedInUser,
+    guestAvatarSrc,
+    accountAvatarSrc,
+    signInWithGoogle,
+    enterGuestMode,
+    enterAccountMode,
+  } = useAuth();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
   const [userImgFailed, setUserImgFailed] = useState(false);
@@ -211,18 +218,21 @@ export default function Landing() {
 
           <div className="flex flex-wrap items-start justify-center gap-5 sm:gap-8 md:gap-10">
             {/* Tile 1: Signed-in User OR Sign in with Google */}
-            {currentUser ? (
+            {signedInUser ? (
               <button
                 type="button"
-                onClick={() => navigate('/home')}
+                onClick={() => {
+                  enterAccountMode();
+                  navigate('/home');
+                }}
                 className="group flex flex-col items-center cursor-pointer focus:outline-none"
               >
                 <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
                   <img
-                    src={userImgFailed ? getAvatarSrc('miyoro') : activeAvatarSrc}
-                    alt={currentUser.displayName || 'User'}
+                    src={userImgFailed ? getAvatarSrc('miyoro') : accountAvatarSrc}
+                    alt={signedInUser.displayName || 'User'}
                     className={`block w-full h-full object-cover transition-transform duration-300 ${
-                      userImgFailed || activeAvatarSrc.endsWith('.svg')
+                      userImgFailed || accountAvatarSrc.endsWith('.svg')
                         ? 'scale-[1.07] group-hover:scale-[1.11]'
                         : 'group-hover:scale-105'
                     }`}
@@ -231,7 +241,7 @@ export default function Landing() {
                   />
                 </div>
                 <span className="mt-3 sm:mt-3.5 text-xs sm:text-sm md:text-base font-medium text-white/70 group-hover:text-white transition-colors max-w-[120px] sm:max-w-[140px] truncate text-center">
-                  {currentUser.displayName || 'Continue'}
+                  {signedInUser.displayName || 'Continue'}
                 </span>
               </button>
             ) : (
@@ -264,7 +274,10 @@ export default function Landing() {
             {/* Tile 2: Guest Profile (Random saved icon) */}
             <button
               type="button"
-              onClick={() => navigate('/home')}
+              onClick={() => {
+                enterGuestMode();
+                navigate('/home');
+              }}
               className="group flex flex-col items-center cursor-pointer focus:outline-none"
             >
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-2 border-white/15 group-hover:border-white group-focus-visible:border-white group-hover:scale-105 group-active:scale-95 transition-all duration-300 ease-[cubic-bezier(0.25,1,0.5,1.2)] shadow-[0_14px_40px_rgba(0,0,0,0.85)] group-hover:shadow-[0_18px_48px_rgba(0,0,0,0.9),0_0_26px_rgba(255,255,255,0.16)] flex items-center justify-center">
