@@ -2,7 +2,7 @@ import { getTmdbApiToken } from './env.js';
 import { ApiError, fetchWithTimeout } from './http.js';
 
 export const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
-export const TMDB_INTERNAL_PATH_PARAM = '__tmdb_path';
+export const TMDB_INTERNAL_PATH_PARAM = 'tmdb_path';
 
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 7000;
 const MAX_PATH_LENGTH = 200;
@@ -381,8 +381,41 @@ export interface ValidatedTmdbRequest {
 }
 
 /**
+ * Resolves the internal Vercel rewrite parameter (`tmdb_path`) safely.
+ * Vercel rewrites (`source: "/api/tmdb/:tmdb_path*"` -> `destination: "/api/tmdb?tmdb_path=:tmdb_path*"`)
+ * may supply a single slash-joined value, identical duplicate values (destination + auto-forwarded source param),
+ * or the slash-joined value alongside split catch-all segments. Any conflicting values are rejected.
+ */
+function resolveInternalRewritePath(rawValues: string[]): string | null {
+  if (rawValues.length === 0) return null;
+
+  const normalized = rawValues.map((v) => (v.endsWith('/') && v.length > 1 ? v.slice(0, -1) : v));
+
+  if (normalized.length === 1) {
+    return normalized[0];
+  }
+
+  const unique = new Set(normalized);
+  if (unique.size === 1) {
+    return normalized[0];
+  }
+
+  const first = normalized[0];
+  if (first && first === normalized.slice(1).join('/')) {
+    return first;
+  }
+
+  const last = normalized[normalized.length - 1];
+  if (last && last === normalized.slice(0, -1).join('/')) {
+    return last;
+  }
+
+  throw new ApiError(400, 'INVALID_TMDB_PATH', 'Conflicting TMDB request paths.');
+}
+
+/**
  * Normalizes and validates the raw TMDB subpath from either `/api/tmdb/<subpath>`
- * or Vercel's rewrite query parameter `?__tmdb_path=<subpath>`.
+ * or Vercel's rewrite query parameter `?tmdb_path=<subpath>`.
  */
 export function extractAndNormalizeTmdbPath(
   pathname: string,
@@ -403,9 +436,7 @@ export function extractAndNormalizeTmdbPath(
   }
 
   const internalPathParams = query.getAll(TMDB_INTERNAL_PATH_PARAM);
-  if (internalPathParams.length > 1) {
-    throw new ApiError(400, 'INVALID_TMDB_PATH', 'Malformed TMDB request path.');
-  }
+  const resolvedInternalPath = resolveInternalRewritePath(internalPathParams);
 
   let rawSubpath = '';
   let alreadyDecoded = false;
@@ -417,8 +448,8 @@ export function extractAndNormalizeTmdbPath(
       throw new ApiError(400, 'INVALID_TMDB_PATH', 'Malformed TMDB request path.');
     }
   } else if (pathname === '/api/tmdb') {
-    if (internalPathParams.length === 1) {
-      rawSubpath = internalPathParams[0];
+    if (resolvedInternalPath !== null) {
+      rawSubpath = resolvedInternalPath;
       alreadyDecoded = true;
     }
   } else {
@@ -426,8 +457,8 @@ export function extractAndNormalizeTmdbPath(
   }
 
   // If both pathname subpath and rewrite param exist, they must match if non-empty
-  if (pathname.startsWith('/api/tmdb/') && internalPathParams.length === 1) {
-    const cleanedRewrite = internalPathParams[0].replace(/^\/+|\/+$/g, '');
+  if (pathname.startsWith('/api/tmdb/') && resolvedInternalPath !== null) {
+    const cleanedRewrite = resolvedInternalPath.replace(/^\/+|\/+$/g, '');
     const cleanedPath = rawSubpath.replace(/^\/+|\/+$/g, '');
     if (cleanedRewrite && cleanedRewrite !== cleanedPath) {
       throw new ApiError(400, 'INVALID_TMDB_PATH', 'Conflicting TMDB request paths.');

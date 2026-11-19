@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/api/tmdb/:path*",
-      "destination": "/api/tmdb?__tmdb_path=:path*"
+      "source": "/api/tmdb/:tmdb_path*",
+      "destination": "/api/tmdb?tmdb_path=:tmdb_path*"
     },
     {
       "source": "/((?!api(?:/|$)).*)",
