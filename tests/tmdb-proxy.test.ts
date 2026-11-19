@@ -247,38 +247,59 @@ describe('TMDB Proxy — Validation, Routing, Caching & Error Handling', () => {
     }
   });
 
-  it('supports Vercel production rewrite shapes cleanly, consuming tmdb_path and never forwarding it upstream', () => {
+  it('supports simulated Vercel rewrite shapes (tmdbPath and exact routing-layer path echoes) without forwarding them upstream', () => {
     const rewriteCases = [
       {
-        label: '1a. Rewritten trending movie (single tmdb_path)',
-        rawUrl: '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&page=1&language=en-US',
+        label: '1a. Rewritten trending movie (single tmdbPath)',
+        rawUrl: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&page=1&language=en-US',
         expectedPath: 'trending/movie/week',
         expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
       },
       {
-        label: '1b. Rewritten trending movie (Vercel auto-duplicated identical tmdb_path)',
+        label: '1b. Rewritten trending movie (duplicated identical tmdbPath)',
         rawUrl:
-          '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&language=en-US&page=1&tmdb_path=trending%2Fmovie%2Fweek',
+          '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&language=en-US&page=1&tmdbPath=trending%2Fmovie%2Fweek',
         expectedPath: 'trending/movie/week',
         expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
       },
       {
-        label: '1c. Rewritten trending movie (destination joined + Vercel split catch-all segments)',
+        label: '1c. Rewritten trending movie (joined tmdbPath + split catch-all segments)',
         rawUrl:
-          '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&language=en-US&page=1&tmdb_path=trending&tmdb_path=movie&tmdb_path=week',
+          '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&language=en-US&page=1&tmdbPath=trending&tmdbPath=movie&tmdbPath=week',
+        expectedPath: 'trending/movie/week',
+        expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
+      },
+      {
+        label: '1d. Rewritten trending movie with Vercel-appended exact path echo (joined)',
+        rawUrl:
+          '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&language=en-US&page=1&path=trending%2Fmovie%2Fweek',
+        expectedPath: 'trending/movie/week',
+        expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
+      },
+      {
+        label: '1e. Rewritten trending movie with Vercel-appended exact path echo (split segments)',
+        rawUrl:
+          '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&language=en-US&page=1&path=trending&path=movie&path=week',
+        expectedPath: 'trending/movie/week',
+        expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
+      },
+      {
+        label: '1f. Direct pathname with Vercel-appended exact path echo',
+        rawUrl:
+          '/api/tmdb/trending/movie/week?language=en-US&page=1&path=trending%2Fmovie%2Fweek',
         expectedPath: 'trending/movie/week',
         expectedUpstream: 'https://api.themoviedb.org/3/trending/movie/week?language=en-US&page=1',
       },
       {
         label: '2. Rewritten trending TV',
-        rawUrl: '/api/tmdb?tmdb_path=trending%2Ftv%2Fweek&language=en-US&page=1',
+        rawUrl: '/api/tmdb?tmdbPath=trending%2Ftv%2Fweek&language=en-US&page=1',
         expectedPath: 'trending/tv/week',
         expectedUpstream: 'https://api.themoviedb.org/3/trending/tv/week?language=en-US&page=1',
       },
       {
-        label: '3. Rewritten movie search with encoded query',
+        label: '3. Rewritten movie search with encoded query + exact path echo',
         rawUrl:
-          '/api/tmdb?tmdb_path=search%2Fmovie&query=Spider-Man%3A%20No%20Way%20Home&include_adult=false&language=en-US&page=1',
+          '/api/tmdb?tmdbPath=search%2Fmovie&query=Spider-Man%3A%20No%20Way%20Home&include_adult=false&language=en-US&page=1&path=search%2Fmovie',
         expectedPath: 'search/movie',
         expectedUpstream:
           'https://api.themoviedb.org/3/search/movie?include_adult=false&language=en-US&page=1&query=Spider-Man%3A+No+Way+Home',
@@ -286,7 +307,7 @@ describe('TMDB Proxy — Validation, Routing, Caching & Error Handling', () => {
       {
         label: '4. Rewritten TV search',
         rawUrl:
-          '/api/tmdb?tmdb_path=search%2Ftv&query=Breaking%20Bad&include_adult=false&language=en-US&page=1',
+          '/api/tmdb?tmdbPath=search%2Ftv&query=Breaking%20Bad&include_adult=false&language=en-US&page=1',
         expectedPath: 'search/tv',
         expectedUpstream:
           'https://api.themoviedb.org/3/search/tv?include_adult=false&language=en-US&page=1&query=Breaking+Bad',
@@ -294,7 +315,7 @@ describe('TMDB Proxy — Validation, Routing, Caching & Error Handling', () => {
       {
         label: '5. Rewritten movie details with append_to_response',
         rawUrl:
-          '/api/tmdb?tmdb_path=movie%2F550&append_to_response=images,credits,content_ratings,release_dates,videos',
+          '/api/tmdb?tmdbPath=movie%2F550&append_to_response=images,credits,content_ratings,release_dates,videos',
         expectedPath: 'movie/550',
         expectedUpstream:
           'https://api.themoviedb.org/3/movie/550?append_to_response=content_ratings%2Ccredits%2Cimages%2Crelease_dates%2Cvideos',
@@ -306,7 +327,7 @@ describe('TMDB Proxy — Validation, Routing, Caching & Error Handling', () => {
       const validated = validateTmdbRequest(parsed.pathname, parsed.searchParams, tc.rawUrl);
       assert.equal(validated.normalizedPath, tc.expectedPath, tc.label);
       assert.equal(validated.upstreamUrl, tc.expectedUpstream, tc.label);
-      assert.ok(!validated.upstreamUrl.includes('tmdb_path'), `${tc.label}: must not forward tmdb_path`);
+      assert.ok(!validated.upstreamUrl.includes('tmdbPath'), `${tc.label}: must not forward tmdbPath`);
       assert.ok(!validated.upstreamUrl.includes('path='), `${tc.label}: must not forward path`);
     }
 
@@ -323,28 +344,32 @@ describe('TMDB Proxy — Validation, Routing, Caching & Error Handling', () => {
     assert.equal(detA.upstreamUrl, detB.upstreamUrl);
   });
 
-  it('8. rejects invalid, private, polluted, and malformed endpoints strictly', async () => {
+  it('8. rejects invalid, private, polluted, arbitrary path, and malformed endpoints strictly', async () => {
     const disallowedPaths: Array<{ url: string; expectedStatus: number }> = [
       { url: '/api/tmdb/account', expectedStatus: 404 },
-      { url: '/api/tmdb?tmdb_path=account', expectedStatus: 404 },
+      { url: '/api/tmdb?tmdbPath=account', expectedStatus: 404 },
       { url: '/api/tmdb/authentication/token/new', expectedStatus: 404 },
       { url: '/api/tmdb/movie/550/rating', expectedStatus: 404 },
       { url: '/api/tmdb/trending/movie/year', expectedStatus: 404 },
       { url: '/api/tmdb/movie/abc', expectedStatus: 404 },
       { url: '/api/tmdb', expectedStatus: 400 },
       { url: '/api/tmdb/', expectedStatus: 400 },
-      { url: '/api/tmdb?tmdb_path=', expectedStatus: 400 },
+      { url: '/api/tmdb?tmdbPath=', expectedStatus: 400 },
+      { url: '/api/tmdb?path=trending%2Fmovie%2Fweek', expectedStatus: 400 }, // path alone without tmdbPath/subpath rejected
       { url: '/api/tmdb/../health', expectedStatus: 400 },
       { url: '/api/tmdb/movie/%2e%2e/account', expectedStatus: 400 },
-      { url: '/api/tmdb?tmdb_path=movie%2F..%2Faccount', expectedStatus: 400 },
-      { url: '/api/tmdb?tmdb_path=movie%2F%252e%252e%2Faccount', expectedStatus: 400 },
+      { url: '/api/tmdb?tmdbPath=movie%2F..%2Faccount', expectedStatus: 400 },
+      { url: '/api/tmdb?tmdbPath=movie%2F%252e%252e%2Faccount', expectedStatus: 400 },
       { url: '/api/tmdb/movie//550', expectedStatus: 400 },
       { url: '/api/tmdb/search/movie?language=en-US', expectedStatus: 400 }, // missing query
       { url: '/api/tmdb/trending/movie/week?api_key=leak', expectedStatus: 400 }, // disallowed param
-      { url: '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&path=evil', expectedStatus: 400 }, // arbitrary user path param still rejected
-      { url: '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&foo=bar', expectedStatus: 400 }, // arbitrary user param rejected
-      { url: '/api/tmdb?tmdb_path=trending%2Fmovie%2Fweek&tmdb_path=account', expectedStatus: 400 }, // conflicting tmdb_path pollution
-      { url: '/api/tmdb/trending/movie/week?tmdb_path=account', expectedStatus: 400 }, // conflicting pathname + tmdb_path
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&path=evil', expectedStatus: 400 }, // arbitrary user path param rejected
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&path=movie%2F550', expectedStatus: 400 }, // mismatched path param rejected
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&path=', expectedStatus: 400 }, // empty path param rejected
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&path=trending%2Fmovie%2Fweek&path=evil', expectedStatus: 400 }, // polluted path param rejected
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&foo=bar', expectedStatus: 400 }, // arbitrary user param rejected
+      { url: '/api/tmdb?tmdbPath=trending%2Fmovie%2Fweek&tmdbPath=account', expectedStatus: 400 }, // conflicting tmdbPath pollution
+      { url: '/api/tmdb/trending/movie/week?tmdbPath=account', expectedStatus: 400 }, // conflicting pathname + tmdbPath
       { url: '/api/tmdb/movie/550?append_to_response=account_states', expectedStatus: 400 }, // disallowed append
     ];
 

@@ -2,7 +2,7 @@ import { getTmdbApiToken } from './env.js';
 import { ApiError, fetchWithTimeout } from './http.js';
 
 export const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
-export const TMDB_INTERNAL_PATH_PARAM = 'tmdb_path';
+export const TMDB_INTERNAL_PATH_PARAM = 'tmdbPath';
 
 const DEFAULT_UPSTREAM_TIMEOUT_MS = 7000;
 const MAX_PATH_LENGTH = 200;
@@ -381,8 +381,8 @@ export interface ValidatedTmdbRequest {
 }
 
 /**
- * Resolves the internal Vercel rewrite parameter (`tmdb_path`) safely.
- * Vercel rewrites (`source: "/api/tmdb/:tmdb_path*"` -> `destination: "/api/tmdb?tmdb_path=:tmdb_path*"`)
+ * Resolves the internal Vercel rewrite parameter (`tmdbPath`) safely.
+ * Vercel rewrites (`source: "/api/tmdb/:tmdbPath*"` -> `destination: "/api/tmdb?tmdbPath=:tmdbPath*"`)
  * may supply a single slash-joined value, identical duplicate values (destination + auto-forwarded source param),
  * or the slash-joined value alongside split catch-all segments. Any conflicting values are rejected.
  */
@@ -414,8 +414,55 @@ function resolveInternalRewritePath(rawValues: string[]): string | null {
 }
 
 /**
+ * Checks whether a `path` query parameter injected by a routing layer is an exact,
+ * non-malicious echo of the already-validated TMDB subpath.
+ * Any arbitrary, mismatched, empty, polluted, or traversal `path` value returns false
+ * so normal strict query validation rejects it with 400 INVALID_QUERY_PARAMETER.
+ */
+function isExactInternalPathEcho(rawValues: string[], normalizedPath: string): boolean {
+  if (rawValues.length === 0) return false;
+
+  const cleaned = rawValues.map((v) => v.replace(/^\/+|\/+$/g, ''));
+
+  if (
+    cleaned.some(
+      (v) =>
+        !v ||
+        v.includes('..') ||
+        v.includes('\\') ||
+        v.includes('%') ||
+        CONTROL_CHAR_REGEX.test(v)
+    )
+  ) {
+    return false;
+  }
+
+  if (cleaned.every((v) => v === normalizedPath)) {
+    return true;
+  }
+
+  if (cleaned.join('/') === normalizedPath) {
+    return true;
+  }
+
+  if (cleaned.length > 1) {
+    if (cleaned[0] === normalizedPath && cleaned.slice(1).join('/') === normalizedPath) {
+      return true;
+    }
+    if (
+      cleaned[cleaned.length - 1] === normalizedPath &&
+      cleaned.slice(0, -1).join('/') === normalizedPath
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Normalizes and validates the raw TMDB subpath from either `/api/tmdb/<subpath>`
- * or Vercel's rewrite query parameter `?tmdb_path=<subpath>`.
+ * or Vercel's rewrite query parameter `?tmdbPath=<subpath>`.
  */
 export function extractAndNormalizeTmdbPath(
   pathname: string,
@@ -546,9 +593,13 @@ export function validateTmdbRequest(
   const allowedParamSet = new Set<string>(matchedRule.allowedParams);
   const validatedEntries: [string, string][] = [];
   const seenKeys = new Set<string>();
+  const pathEchoMatchesRoute = isExactInternalPathEcho(query.getAll('path'), normalizedPath);
 
   for (const [key, value] of query.entries()) {
     if (key === TMDB_INTERNAL_PATH_PARAM) {
+      continue;
+    }
+    if (key === 'path' && pathEchoMatchesRoute) {
       continue;
     }
     if (!allowedParamSet.has(key)) {
