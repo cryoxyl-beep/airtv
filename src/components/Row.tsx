@@ -327,7 +327,7 @@ const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps)
     updateScrollEdges();
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const cornerThreshold = Math.min(96, rect.width * 0.14);
+    const cornerThreshold = Math.min(116, rect.width * 0.14);
     if (x <= cornerThreshold) {
       setHoveredEdge('left');
     } else if (x >= rect.width - cornerThreshold) {
@@ -370,7 +370,7 @@ const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps)
         onMouseMove={handleTrackMouseMove}
         onMouseLeave={() => setHoveredEdge(null)}
       >
-        {/* Left Edge Navigation Button (Clean edge gradient + chevron, only on left corner hover) */}
+        {/* Left Edge Navigation Button (Full-height edge gradient + chevron, covers both portrait & landscape cards including hover scale) */}
         <button
           type="button"
           aria-label={`Scroll ${title} left`}
@@ -379,7 +379,7 @@ const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps)
             e.stopPropagation();
             scrollByDirection('left');
           }}
-          className={`hidden md:flex group/nav items-center justify-start pl-3 sm:pl-4 absolute left-0 top-4 bottom-4 w-16 sm:w-20 z-[60] bg-gradient-to-r from-black/85 via-black/45 to-transparent text-white/90 hover:text-white transition-opacity duration-200 ease-out cursor-pointer focus:outline-none ${
+          className={`hidden md:flex group/nav items-center justify-start pl-3 sm:pl-4 absolute left-0 top-0 bottom-0 w-20 sm:w-24 md:w-28 z-[60] bg-gradient-to-r from-black via-black/75 to-transparent text-white/90 hover:text-white transition-opacity duration-200 ease-out cursor-pointer focus:outline-none ${
             showLeftNav
               ? 'opacity-100 pointer-events-auto'
               : 'opacity-0 pointer-events-none'
@@ -388,7 +388,7 @@ const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps)
           <ChevronLeft className="w-7 h-7 sm:w-8 sm:h-8 stroke-[2.5] drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)] transition-transform duration-150 group-hover/nav:scale-110 group-active/nav:scale-95" />
         </button>
 
-        {/* Right Edge Navigation Button (Clean edge gradient + chevron, only on right corner hover) */}
+        {/* Right Edge Navigation Button (Full-height edge gradient + chevron, covers both portrait & landscape cards including hover scale) */}
         <button
           type="button"
           aria-label={`Scroll ${title} right`}
@@ -397,7 +397,7 @@ const Row = React.memo(function Row({ title, items, isTop10 = false }: RowProps)
             e.stopPropagation();
             scrollByDirection('right');
           }}
-          className={`hidden md:flex group/nav items-center justify-end pr-3 sm:pr-4 absolute right-0 top-4 bottom-4 w-16 sm:w-20 z-[60] bg-gradient-to-l from-black/85 via-black/45 to-transparent text-white/90 hover:text-white transition-opacity duration-200 ease-out cursor-pointer focus:outline-none ${
+          className={`hidden md:flex group/nav items-center justify-end pr-3 sm:pr-4 absolute right-0 top-0 bottom-0 w-20 sm:w-24 md:w-28 z-[60] bg-gradient-to-l from-black via-black/75 to-transparent text-white/90 hover:text-white transition-opacity duration-200 ease-out cursor-pointer focus:outline-none ${
             showRightNav
               ? 'opacity-100 pointer-events-auto'
               : 'opacity-0 pointer-events-none'
