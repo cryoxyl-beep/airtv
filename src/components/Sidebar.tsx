@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   HomeIcon,
   SearchIcon,
+  DiscoverIcon,
   TvIcon,
   AnimeIcon,
   MoviesIcon,
@@ -40,7 +41,7 @@ export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: b
   // Navigation icon size: slightly larger (26px) on watch pages, standard (24px) elsewhere
   const navIconSize = isWatchPage ? 26 : 24;
 
-  // Strictly the 5 requested navigation entries (Home, Search, TV, Anime, Movies):
+  // Navigation entries preserving existing ordering + Discover:
   const navItems = [
     {
       id: 'home',
@@ -55,6 +56,13 @@ export default function Sidebar({ hiddenBySplash = false }: { hiddenBySplash?: b
       icon: SearchIcon,
       path: '/search',
       isActive: location.pathname === '/search',
+    },
+    {
+      id: 'discover',
+      label: 'Discover',
+      icon: DiscoverIcon,
+      path: '/discover',
+      isActive: location.pathname === '/discover' || location.pathname.startsWith('/discover/'),
     },
     {
       id: 'tv',

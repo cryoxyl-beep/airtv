@@ -6,6 +6,7 @@ import WatchPage from './pages/WatchPage';
 import PlayerPage from './pages/PlayerPage';
 import BrowsePage from './pages/BrowsePage';
 import SearchPage from './pages/SearchPage';
+import DiscoverPage from './pages/DiscoverPage';
 import MySpace from './pages/MySpace';
 import NotFound from './components/MiyoroNotFound';
 import { useScrollRestoration } from './hooks/useScrollRestoration';
@@ -141,6 +142,7 @@ export default function App() {
             <Route path="/play/anime/:id/:episode" element={<PlayerPage type="anime" />} />
             <Route path="/browse/:platform" element={<BrowsePage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route path="/discover" element={<DiscoverPage />} />
             <Route path="*" element={<NotFoundRoute />} />
           </Routes>
         </AppLayout>

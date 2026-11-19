@@ -917,3 +917,317 @@ export const searchTV = async (query: string) => {
     return { results: [] };
   }
 };
+
+// ============================================================================
+// MIYORO DISCOVER — TRENDING ACTORS, DETAILS & COMBINED CREDITS
+// ============================================================================
+
+export interface TrendingActorSummary {
+  id: number;
+  name: string;
+  original_name?: string;
+  profile_path: string;
+  known_for_department: string;
+  popularity: number;
+  known_for?: any[];
+}
+
+export interface ActorDetails {
+  id: number;
+  name: string;
+  biography: string;
+  profile_path: string | null;
+  known_for_department: string;
+  popularity: number;
+  birthday: string | null;
+  deathday: string | null;
+  place_of_birth: string | null;
+  also_known_as?: string[];
+}
+
+export interface ActorCreditItem {
+  id: number;
+  media_type: 'movie' | 'tv';
+  title: string;
+  name: string;
+  original_title?: string;
+  original_name?: string;
+  poster_path: string;
+  backdrop_path: string | null;
+  character: string;
+  popularity: number;
+  vote_average: number;
+  vote_count: number;
+  release_date?: string;
+  first_air_date?: string;
+  release_year: number | null;
+  episode_count?: number;
+  genre_ids?: number[];
+  overview?: string;
+  credit_order?: number;
+}
+
+const personApiQueue = new ConcurrencyQueue(3);
+const PERSON_STORAGE_PREFIX = 'miyoro_discover_v1_';
+
+const readSessionCache = <T>(key: string): T | null => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return null;
+  try {
+    const raw = window.sessionStorage.getItem(`${PERSON_STORAGE_PREFIX}${key}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+const writeSessionCache = (key: string, value: any): void => {
+  if (typeof window === 'undefined' || !window.sessionStorage) return;
+  try {
+    window.sessionStorage.setItem(`${PERSON_STORAGE_PREFIX}${key}`, JSON.stringify(value));
+  } catch {
+    // ignore storage quota errors
+  }
+};
+
+export const fetchTrendingPeople = async (
+  timeWindow: 'week' | 'day' = 'week',
+  page: number = 1
+): Promise<{ results: TrendingActorSummary[]; page: number; total_pages: number }> => {
+  const cacheKey = `trending_person_${timeWindow}_p${page}`;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+
+  const sessionCached = readSessionCache<{ results: TrendingActorSummary[]; page: number; total_pages: number }>(cacheKey);
+  if (sessionCached) {
+    responseCache.set(cacheKey, sessionCached);
+    return sessionCached;
+  }
+
+  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+
+  const p = (async () => {
+    try {
+      const res = await fetch(
+        `${BASE_URL}/trending/person/${timeWindow}?language=en-US&page=${page}`,
+        fetchOptions
+      );
+      if (!res.ok) {
+        throw new Error(`TMDB trending person error: ${res.status}`);
+      }
+      const data = await res.json();
+      const rawResults: any[] = Array.isArray(data?.results) ? data.results : [];
+
+      const seenIds = new Set<number>();
+      const filtered: TrendingActorSummary[] = [];
+
+      for (const person of rawResults) {
+        if (!person || typeof person.id !== 'number') continue;
+        if (person.known_for_department !== 'Acting') continue;
+        if (typeof person.profile_path !== 'string' || person.profile_path.trim().length === 0) continue;
+        if (seenIds.has(person.id)) continue;
+        seenIds.add(person.id);
+
+        if (Array.isArray(person.known_for)) {
+          indexSeedItems(person.known_for);
+        }
+
+        filtered.push({
+          id: person.id,
+          name: person.name || person.original_name || 'Unknown Actor',
+          original_name: person.original_name,
+          profile_path: person.profile_path,
+          known_for_department: person.known_for_department,
+          popularity: typeof person.popularity === 'number' ? person.popularity : 0,
+          known_for: Array.isArray(person.known_for) ? person.known_for : [],
+        });
+      }
+
+      // Preserve TMDB's popularity ordering
+      filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+      const normalized = {
+        results: filtered,
+        page: typeof data?.page === 'number' ? data.page : page,
+        total_pages: typeof data?.total_pages === 'number' ? data.total_pages : 1,
+      };
+
+      responseCache.set(cacheKey, normalized);
+      writeSessionCache(cacheKey, normalized);
+      return normalized;
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  })();
+
+  inFlightRequests.set(cacheKey, p);
+  return p;
+};
+
+export const fetchPersonDetails = async (personId: number): Promise<ActorDetails> => {
+  const cacheKey = `person_details_${personId}`;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+
+  const sessionCached = readSessionCache<ActorDetails>(cacheKey);
+  if (sessionCached) {
+    responseCache.set(cacheKey, sessionCached);
+    return sessionCached;
+  }
+
+  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+
+  const p = personApiQueue.enqueue(async () => {
+    const res = await fetch(`${BASE_URL}/person/${personId}?language=en-US`, fetchOptions);
+    if (!res.ok) {
+      throw new Error(`TMDB person details error (${personId}): ${res.status}`);
+    }
+    const data = await res.json();
+    const details: ActorDetails = {
+      id: data.id,
+      name: data.name || 'Unknown Actor',
+      biography: typeof data.biography === 'string' ? data.biography.trim() : '',
+      profile_path: data.profile_path || null,
+      known_for_department: data.known_for_department || 'Acting',
+      popularity: typeof data.popularity === 'number' ? data.popularity : 0,
+      birthday: data.birthday || null,
+      deathday: data.deathday || null,
+      place_of_birth: data.place_of_birth || null,
+      also_known_as: Array.isArray(data.also_known_as) ? data.also_known_as : [],
+    };
+    responseCache.set(cacheKey, details);
+    writeSessionCache(cacheKey, details);
+    return details;
+  });
+
+  const tracked = p.finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+  inFlightRequests.set(cacheKey, tracked);
+  return tracked;
+};
+
+export const fetchPersonCombinedCredits = async (personId: number): Promise<ActorCreditItem[]> => {
+  const cacheKey = `person_combined_credits_${personId}`;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+
+  const sessionCached = readSessionCache<ActorCreditItem[]>(cacheKey);
+  if (sessionCached) {
+    responseCache.set(cacheKey, sessionCached);
+    indexSeedItems(sessionCached);
+    return sessionCached;
+  }
+
+  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+
+  const p = personApiQueue.enqueue(async () => {
+    const res = await fetch(
+      `${BASE_URL}/person/${personId}/combined_credits?language=en-US`,
+      fetchOptions
+    );
+    if (!res.ok) {
+      throw new Error(`TMDB combined credits error (${personId}): ${res.status}`);
+    }
+    const data = await res.json();
+    const rawCast: any[] = Array.isArray(data?.cast) ? data.cast : [];
+
+    const dedupedMap = new Map<string, ActorCreditItem>();
+
+    for (const entry of rawCast) {
+      if (!entry || typeof entry.id !== 'number') continue;
+      const mediaType: 'movie' | 'tv' | null =
+        entry.media_type === 'movie'
+          ? 'movie'
+          : entry.media_type === 'tv'
+          ? 'tv'
+          : entry.first_air_date
+          ? 'tv'
+          : entry.release_date
+          ? 'movie'
+          : null;
+      if (!mediaType) continue;
+
+      if (typeof entry.poster_path !== 'string' || entry.poster_path.trim().length === 0) {
+        continue;
+      }
+
+      const key = `${mediaType}_${entry.id}`;
+      const rawDate = entry.release_date || entry.first_air_date || '';
+      const parsedYear = rawDate ? parseInt(String(rawDate).slice(0, 4), 10) : null;
+      const releaseYear = parsedYear && !Number.isNaN(parsedYear) ? parsedYear : null;
+      const cleanChar = typeof entry.character === 'string' ? entry.character.trim() : '';
+
+      const existing = dedupedMap.get(key);
+      if (existing) {
+        if (
+          cleanChar &&
+          !existing.character.toLowerCase().includes(cleanChar.toLowerCase())
+        ) {
+          existing.character = existing.character
+            ? `${existing.character} / ${cleanChar}`
+            : cleanChar;
+        }
+        if ((entry.popularity || 0) > existing.popularity) {
+          existing.popularity = entry.popularity;
+        }
+        continue;
+      }
+
+      const itemTitle = entry.title || entry.name || entry.original_title || entry.original_name || 'Untitled';
+      const creditItem: ActorCreditItem = {
+        id: entry.id,
+        media_type: mediaType,
+        title: itemTitle,
+        name: entry.name || itemTitle,
+        original_title: entry.original_title,
+        original_name: entry.original_name,
+        poster_path: entry.poster_path,
+        backdrop_path: entry.backdrop_path || null,
+        character: cleanChar,
+        popularity: typeof entry.popularity === 'number' ? entry.popularity : 0,
+        vote_average: typeof entry.vote_average === 'number' ? entry.vote_average : 0,
+        vote_count: typeof entry.vote_count === 'number' ? entry.vote_count : 0,
+        release_date: entry.release_date,
+        first_air_date: entry.first_air_date,
+        release_year: releaseYear,
+        episode_count: typeof entry.episode_count === 'number' ? entry.episode_count : undefined,
+        genre_ids: Array.isArray(entry.genre_ids) ? entry.genre_ids : [],
+        overview: entry.overview || '',
+        credit_order: typeof entry.order === 'number' ? entry.order : 999,
+      };
+
+      dedupedMap.set(key, creditItem);
+    }
+
+    const credits = Array.from(dedupedMap.values());
+
+    // Sort sensibly: prioritize weighted popularity + vote count so major film/TV roles appear first
+    credits.sort((a, b) => {
+      const scoreA = (a.popularity || 0) + Math.min(a.vote_count || 0, 5000) * 0.015;
+      const scoreB = (b.popularity || 0) + Math.min(b.vote_count || 0, 5000) * 0.015;
+      return scoreB - scoreA;
+    });
+
+    indexSeedItems(credits);
+    responseCache.set(cacheKey, credits);
+    writeSessionCache(cacheKey, credits);
+    return credits;
+  });
+
+  const tracked = p.finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+  inFlightRequests.set(cacheKey, tracked);
+  return tracked;
+};
+
+export const getCachedPersonDetails = (personId: number): ActorDetails | null => {
+  const cacheKey = `person_details_${personId}`;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  return readSessionCache<ActorDetails>(cacheKey);
+};
+
+export const getCachedPersonCombinedCredits = (personId: number): ActorCreditItem[] | null => {
+  const cacheKey = `person_combined_credits_${personId}`;
+  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  return readSessionCache<ActorCreditItem[]>(cacheKey);
+};
+

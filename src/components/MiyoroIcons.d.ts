@@ -15,10 +15,12 @@ export function MoviesIcon(props: IconProps): React.JSX.Element;
 export function SportsIcon(props: IconProps): React.JSX.Element;
 export function SparksIcon(props: IconProps): React.JSX.Element;
 export function CategoriesIcon(props: IconProps): React.JSX.Element;
+export function DiscoverIcon(props: IconProps): React.JSX.Element;
 
 export const miyoroIcons: {
   home: typeof HomeIcon;
   search: typeof SearchIcon;
+  discover: typeof DiscoverIcon;
   tv: typeof TvIcon;
   series: typeof TvIcon;
   anime: typeof AnimeIcon;

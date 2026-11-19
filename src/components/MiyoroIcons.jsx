@@ -118,9 +118,24 @@ export function CategoriesIcon({ active, ...props }) {
   );
 }
 
+// Discover: compass ring with a tilted 4-point star needle inside.
+export function DiscoverIcon({ active, ...props }) {
+  return (
+    <Icon active={active} {...props}>
+      <circle cx="12" cy="12" r="9" {...tint(active)} />
+      <polygon
+        points="16.2,7.8 13.7,13.7 7.8,16.2 10.3,10.3"
+        {...tint(active)}
+      />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
+
 export const miyoroIcons = {
   home: HomeIcon,
   search: SearchIcon,
+  discover: DiscoverIcon,
   tv: TvIcon,
   series: TvIcon,
   anime: AnimeIcon,
