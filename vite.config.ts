@@ -23,46 +23,54 @@ function miyoroDevApiPlugin(): Plugin {
           return next();
         }
 
-        const relPath = pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
-        const segments = relPath ? relPath.split('/') : [];
+        let modulePath = '';
 
-        // Reject empty paths, path traversal, or private _-prefixed helper modules
-        if (
-          segments.length === 0 ||
-          segments.some((seg) => !validSegment.test(seg) || seg.startsWith('_'))
-        ) {
-          res.statusCode = 404;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: 'NOT_FOUND',
-                message: 'API endpoint not found.',
-              },
-            })
-          );
-          return;
-        }
+        if (pathname === '/api/tmdb' || pathname.startsWith('/api/tmdb/')) {
+          modulePath = '/api/tmdb.ts';
+        } else {
+          const relPath = pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+          const segments = relPath ? relPath.split('/') : [];
 
-        const candidateFile = path.resolve(apiRoot, ...segments) + '.ts';
-        if (!candidateFile.startsWith(apiRoot + path.sep) || !fs.existsSync(candidateFile)) {
-          res.statusCode = 404;
-          res.setHeader('Content-Type', 'application/json; charset=utf-8');
-          res.end(
-            JSON.stringify({
-              ok: false,
-              error: {
-                code: 'NOT_FOUND',
-                message: 'API endpoint not found.',
-              },
-            })
-          );
-          return;
+          // Reject empty paths, path traversal, or private _-prefixed helper modules
+          if (
+            segments.length === 0 ||
+            segments.some((seg) => !validSegment.test(seg) || seg.startsWith('_'))
+          ) {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(
+              JSON.stringify({
+                ok: false,
+                error: {
+                  code: 'NOT_FOUND',
+                  message: 'API endpoint not found.',
+                },
+              })
+            );
+            return;
+          }
+
+          const candidateFile = path.resolve(apiRoot, ...segments) + '.ts';
+          if (!candidateFile.startsWith(apiRoot + path.sep) || !fs.existsSync(candidateFile)) {
+            res.statusCode = 404;
+            res.setHeader('Content-Type', 'application/json; charset=utf-8');
+            res.end(
+              JSON.stringify({
+                ok: false,
+                error: {
+                  code: 'NOT_FOUND',
+                  message: 'API endpoint not found.',
+                },
+              })
+            );
+            return;
+          }
+
+          modulePath = `/api/${segments.join('/')}.ts`;
         }
 
         try {
-          const mod = await server.ssrLoadModule(`/api/${segments.join('/')}.ts`);
+          const mod = await server.ssrLoadModule(modulePath);
           if (typeof mod?.default !== 'function') {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json; charset=utf-8');

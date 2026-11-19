@@ -35,18 +35,22 @@ export class ApiError extends Error {
   readonly statusCode: number;
   readonly code: string;
   readonly expose: boolean;
+  readonly retryAfterSeconds?: number;
 
   constructor(
     statusCode: number,
     code: string,
     message: string,
-    options: { expose?: boolean; cause?: unknown } = {}
+    options: { expose?: boolean; cause?: unknown; retryAfterSeconds?: number } = {}
   ) {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
     this.code = code;
     this.expose = options.expose ?? statusCode < 500;
+    if (options.retryAfterSeconds !== undefined) {
+      this.retryAfterSeconds = options.retryAfterSeconds;
+    }
     if (options.cause !== undefined) {
       (this as { cause?: unknown }).cause = options.cause;
     }
@@ -184,7 +188,13 @@ export function sendEmpty(res: ApiResponse, statusCode: number): void {
 export function sendError(res: ApiResponse, err: unknown, requestId: string): void {
   if (res.writableEnded || res.headersSent) return;
 
+  // Never allow error responses to be cached by CDNs or browsers
+  res.setHeader('Cache-Control', 'no-store');
+
   if (err instanceof ApiError) {
+    if (err.retryAfterSeconds !== undefined && err.retryAfterSeconds > 0) {
+      res.setHeader('Retry-After', String(Math.ceil(err.retryAfterSeconds)));
+    }
     const publicMessage = err.expose ? err.message : 'An internal server error occurred.';
     sendJson(res, err.statusCode, {
       ok: false,
@@ -275,7 +285,8 @@ export async function readJsonBody<T = Record<string, unknown>>(
 export async function fetchWithTimeout(
   url: string,
   init: RequestInit = {},
-  timeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS
+  timeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
+  fetchFn: typeof fetch = fetch
 ): Promise<Response> {
   const controller = new AbortController();
   const parentSignal = init.signal;
@@ -294,7 +305,7 @@ export async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
-    return await fetch(url, {
+    return await fetchFn(url, {
       ...init,
       signal: controller.signal,
     });
