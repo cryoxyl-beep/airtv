@@ -1,16 +1,16 @@
 import { resolveAnimeMapping } from './fribb';
+import {
+  TmdbHttpError,
+  canonicalizeAppendToResponse,
+  isTransientTmdbError,
+  isValidTmdbId,
+  isValidTmdbSeasonNumber,
+  sanitizeTmdbSearchQuery,
+  sanitizeTmdbTitleFallbackQuery,
+  tmdbProxyFetch,
+} from './tmdbProxy';
+import { indexedDbCache } from '../lib/cache/indexedDbCache';
 
-const API_READ_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmYmM3ZjM4ZTEwNzBmMWI4NzM2MDc4OTM4MDA1OThkOSIsIm5iZiI6MTcxNzIxNDAzNi4wMzIsInN1YiI6IjY2NWE5YjU0M2MzMmNiMWFiZmFmMGFmOCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.BEKlgnL8r52GcU2Fb8QXcp3W9-giqabR8AtbBlGDmU0';
-
-export const fetchOptions = {
-  method: 'GET',
-  headers: {
-    accept: 'application/json',
-    Authorization: `Bearer ${API_READ_TOKEN}`
-  }
-};
-
-const BASE_URL = 'https://api.themoviedb.org/3';
 export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w1280';
 export const IMAGE_BASE_URL_ORIGINAL = 'https://image.tmdb.org/t/p/original';
 export const IMAGE_BASE_URL_W500 = 'https://image.tmdb.org/t/p/w500';
@@ -19,8 +19,10 @@ export const IMAGE_BASE_URL_W300 = 'https://image.tmdb.org/t/p/w300';
 const LOGO_CACHE_VERSION = 'v2';
 const memoryLogoCache = new Map<string, string | null>();
 const inFlightLogos = new Map<string, Promise<string | null>>();
+const backgroundRefreshLogos = new Map<string, Promise<void>>();
 const responseCache = new Map<string, any>();
 const inFlightRequests = new Map<string, Promise<any>>();
+const backgroundRefreshRequests = new Map<string, Promise<void>>();
 const seedItemStore = new Map<string, any>();
 const preloadedImageUrls = new Set<string>();
 
@@ -29,6 +31,110 @@ interface CachedLogo {
   source: string;
   version: string;
   timestamp: number;
+}
+
+function isValidCachedLogoRecord(val: unknown): val is CachedLogo {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return false;
+  const candidate = val as CachedLogo;
+  if (candidate.version !== LOGO_CACHE_VERSION && candidate.version !== 'v1') return false;
+  return typeof candidate.url === 'string' && candidate.url.length > 0;
+}
+
+export function isValidTmdbListPayload(val: unknown): val is { results: any[]; [key: string]: any } {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return false;
+  const results = (val as { results?: unknown }).results;
+  return Array.isArray(results) && results.length > 0;
+}
+
+export function isValidTmdbDetailsPayload(val: unknown): val is Record<string, any> {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return false;
+  const id = (val as { id?: unknown }).id;
+  return typeof id === 'number' && Number.isFinite(id) && id > 0;
+}
+
+export function isValidTmdbSeasonPayload(val: unknown): val is Record<string, any> {
+  if (!val || typeof val !== 'object' || Array.isArray(val)) return false;
+  const episodes = (val as { episodes?: unknown }).episodes;
+  return Array.isArray(episodes);
+}
+
+interface TmdbL2FetchOptions<T = any> {
+  cacheKey: string;
+  fetcher: () => Promise<T>;
+  validate: (value: unknown) => boolean;
+  onHydrate?: (value: T) => void;
+  readSyncFallback?: () => T | null;
+  writeSyncFallback?: (value: T) => void;
+}
+
+async function fetchWithTmdbL2Cache<T = any>({
+  cacheKey,
+  fetcher,
+  validate,
+  onHydrate,
+  readSyncFallback,
+  writeSyncFallback,
+}: TmdbL2FetchOptions<T>): Promise<T> {
+  if (responseCache.has(cacheKey)) {
+    return responseCache.get(cacheKey) as T;
+  }
+
+  if (readSyncFallback) {
+    const syncCached = readSyncFallback();
+    if (syncCached && validate(syncCached)) {
+      onHydrate?.(syncCached);
+      responseCache.set(cacheKey, syncCached);
+      return syncCached;
+    }
+  }
+
+  if (inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey)! as Promise<T>;
+  }
+
+  const runNetworkFetchAndPersist = async (): Promise<T> => {
+    const freshData = await fetcher();
+    onHydrate?.(freshData);
+    if (validate(freshData)) {
+      responseCache.set(cacheKey, freshData);
+      writeSyncFallback?.(freshData);
+      void indexedDbCache.set('tmdb', cacheKey, freshData, { validate });
+    }
+    return freshData;
+  };
+
+  const p = (async () => {
+    try {
+      const l2Hit = await indexedDbCache.get<T>('tmdb', cacheKey, { validate });
+      if (l2Hit) {
+        onHydrate?.(l2Hit.value);
+        responseCache.set(cacheKey, l2Hit.value);
+        writeSyncFallback?.(l2Hit.value);
+
+        if (l2Hit.status === 'stale' && !backgroundRefreshRequests.has(cacheKey)) {
+          const refreshPromise = runNetworkFetchAndPersist()
+            .then(() => undefined)
+            .catch(() => undefined)
+            .finally(() => {
+              backgroundRefreshRequests.delete(cacheKey);
+            });
+          backgroundRefreshRequests.set(cacheKey, refreshPromise);
+        }
+
+        return l2Hit.value;
+      }
+    } catch {
+      // Fall through to network fetch if IndexedDB fails
+    }
+
+    return runNetworkFetchAndPersist();
+  })();
+
+  const tracked = p.finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+  inFlightRequests.set(cacheKey, tracked);
+  return tracked;
 }
 
 export const preloadImageUrl = (url: string | null | undefined): Promise<void> => {
@@ -189,19 +295,24 @@ export const primeLogoCache = (type: string, id: number | string, logoFilePathOr
     memoryLogoCache.set(cacheKey, finalUrl);
     preloadImageUrl(finalUrl);
 
+    const cacheData: CachedLogo = {
+      url: finalUrl,
+      source: 'TMDB',
+      version: LOGO_CACHE_VERSION,
+      timestamp: Date.now()
+    };
+
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
-        const cacheData: CachedLogo = {
-          url: finalUrl,
-          source: 'TMDB',
-          version: LOGO_CACHE_VERSION,
-          timestamp: Date.now()
-        };
         localStorage.setItem(cacheKey, JSON.stringify(cacheData));
       } catch (e) {
         // ignore storage quota errors
       }
     }
+
+    void indexedDbCache.set('tmdb', cacheKey, cacheData, {
+      validate: isValidCachedLogoRecord,
+    });
   }
 };
 
@@ -335,14 +446,14 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
 
     if (!info) {
       const rawTitle = item.title || item.name || '';
-      if (rawTitle) {
+      const cleanQuery = sanitizeTmdbTitleFallbackQuery(rawTitle);
+      if (cleanQuery) {
         try {
-          const cleanQuery = rawTitle
-            .replace(/×/g, 'x')
-            .replace(/[^\w\s]/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-          const searchRes = await fetch(`${BASE_URL}/search/multi?query=${encodeURIComponent(cleanQuery)}&include_adult=false&language=en-US`, fetchOptions);
+          const searchRes = await tmdbProxyFetch('search/multi', {
+            include_adult: false,
+            language: 'en-US',
+            query: cleanQuery,
+          });
           if (searchRes.ok) {
             const sData = await searchRes.json();
             const first = sData.results?.find((r: any) => (r.media_type === 'tv' || r.media_type === 'movie'));
@@ -375,78 +486,42 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
     return inFlightLogos.get(cacheKey)!;
   }
 
-  const fetchTask = async () => {
+  const fetchFromNetworkAndPersistLogo = async (): Promise<string | null> => {
     let finalUrl: string | null = null;
     let source = 'none';
 
     // 1. Fetch TMDB images without language filter so all logos (en, null, ja) are retrieved
-    try {
-      const res = await fetch(`${BASE_URL}/${type}/${id}/images`, fetchOptions);
-      if (res.ok) {
-        const data = await res.json();
-        const tmdbLogo = extractBestLogoPath(data.logos || []);
-        if (tmdbLogo) {
-          finalUrl = `${IMAGE_BASE_URL_W500}${tmdbLogo}`;
-          source = 'TMDB';
-        }
-      }
-    } catch (error) {
-      // ignore
-    }
-
-    // 2. If no logo found and it was a TV show, check Movie endpoint (and vice-versa)
-    if (!finalUrl) {
-      const altType = type === 'tv' ? 'movie' : 'tv';
+    const validMediaType = type === 'movie' || type === 'tv';
+    if (validMediaType && isValidTmdbId(id)) {
       try {
-        const altRes = await fetch(`${BASE_URL}/${altType}/${id}/images`, fetchOptions);
-        if (altRes.ok) {
-          const altData = await altRes.json();
-          const altLogo = extractBestLogoPath(altData.logos || []);
-          if (altLogo) {
-            finalUrl = `${IMAGE_BASE_URL_W500}${altLogo}`;
+        const res = await tmdbProxyFetch(`${type}/${id}/images`);
+        if (res.ok) {
+          const data = await res.json();
+          const tmdbLogo = extractBestLogoPath(data.logos || []);
+          if (tmdbLogo) {
+            finalUrl = `${IMAGE_BASE_URL_W500}${tmdbLogo}`;
             source = 'TMDB';
           }
         }
-      } catch (e) {
+      } catch (error) {
         // ignore
       }
-    }
 
-    // 3. Fallback to Fanart.tv if available
-    const FANART_API_KEY = (import.meta as any).env?.VITE_FANART_API_KEY;
-    if (!finalUrl && FANART_API_KEY && FANART_API_KEY !== '[PASTE_FANART_API_KEY_HERE]') {
-      if (type === 'movie') {
+      // 2. If no logo found and it was a TV show, check Movie endpoint (and vice-versa)
+      if (!finalUrl) {
+        const altType = type === 'tv' ? 'movie' : 'tv';
         try {
-          const res = await fetch(`https://webservice.fanart.tv/v3.2/movies/${id}?api_key=${FANART_API_KEY}`);
-          if (res.ok) {
-            const data = await res.json();
-            const hdlogos = data.hdmovielogo || [];
-            if (hdlogos.length > 0) {
-              const enLogo = hdlogos.find((l: any) => l.lang === 'en');
-              finalUrl = enLogo?.url || hdlogos[0]?.url;
-              if (finalUrl) source = 'Fanart.tv';
+          const altRes = await tmdbProxyFetch(`${altType}/${id}/images`);
+          if (altRes.ok) {
+            const altData = await altRes.json();
+            const altLogo = extractBestLogoPath(altData.logos || []);
+            if (altLogo) {
+              finalUrl = `${IMAGE_BASE_URL_W500}${altLogo}`;
+              source = 'TMDB';
             }
           }
         } catch (e) {
           // ignore
-        }
-      } else if (type === 'tv') {
-        const tvdbId = item.external_ids?.tvdb_id || item.tvdb_id || item.fribb_mapping?.tvdbId;
-        if (tvdbId) {
-          try {
-            const res = await fetch(`https://webservice.fanart.tv/v3.2/tv/${tvdbId}?api_key=${FANART_API_KEY}`);
-            if (res.ok) {
-              const data = await res.json();
-              const hdtvlogos = data.hdtvlogo || [];
-              if (hdtvlogos.length > 0) {
-                const enLogo = hdtvlogos.find((l: any) => l.lang === 'en');
-                finalUrl = enLogo?.url || hdtvlogos[0]?.url;
-                if (finalUrl) source = 'Fanart.tv';
-              }
-            }
-          } catch (e) {
-            // ignore
-          }
         }
       }
     }
@@ -455,24 +530,65 @@ export const resolveLogo = async (item: any): Promise<string | null> => {
       memoryLogoCache.set(cacheKey, finalUrl);
       preloadImageUrl(finalUrl);
 
+      const cacheData: CachedLogo = {
+        url: finalUrl,
+        source,
+        version: LOGO_CACHE_VERSION,
+        timestamp: Date.now()
+      };
+
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
-          const cacheData: CachedLogo = {
-            url: finalUrl,
-            source,
-            version: LOGO_CACHE_VERSION,
-            timestamp: Date.now()
-          };
           localStorage.setItem(cacheKey, JSON.stringify(cacheData));
         } catch (e) {
           // ignore
         }
       }
+
+      void indexedDbCache.set('tmdb', cacheKey, cacheData, {
+        validate: isValidCachedLogoRecord,
+      });
     } else {
       memoryLogoCache.set(cacheKey, null);
     }
 
     return finalUrl;
+  };
+
+  const fetchTask = async () => {
+    try {
+      const l2Hit = await indexedDbCache.get<CachedLogo>('tmdb', cacheKey, {
+        validate: isValidCachedLogoRecord,
+      });
+      if (l2Hit && typeof l2Hit.value.url === 'string' && l2Hit.value.url.length > 0) {
+        const normalized = normalizeLogoUrl(l2Hit.value.url);
+        if (normalized) {
+          memoryLogoCache.set(cacheKey, normalized);
+          preloadImageUrl(normalized);
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({ ...l2Hit.value, url: normalized }));
+            } catch {
+              // ignore
+            }
+          }
+          if (l2Hit.status === 'stale' && !backgroundRefreshLogos.has(cacheKey)) {
+            const refreshPromise = fetchFromNetworkAndPersistLogo()
+              .then(() => undefined)
+              .catch(() => undefined)
+              .finally(() => {
+                backgroundRefreshLogos.delete(cacheKey);
+              });
+            backgroundRefreshLogos.set(cacheKey, refreshPromise);
+          }
+          return normalized;
+        }
+      }
+    } catch {
+      // Fall through to network fetch if IndexedDB fails
+    }
+
+    return fetchFromNetworkAndPersistLogo();
   };
 
   const queuedPromise = logoQueue.enqueue(fetchTask);
@@ -523,119 +639,133 @@ export const filterOutAnime = (results: any[]): any[] => {
 
 export const fetchTrending = async () => {
   const cacheKey = 'trending_all_day';
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/trending/all/day?language=en-US`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        indexSeedItems(data.results);
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn("fetchTrending failed:", error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          indexSeedItems(data.results);
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('trending/all/day', { language: 'en-US' });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB trending error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn("fetchTrending failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchTop10 = async () => {
   const cacheKey = 'tv_popular_1';
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/tv/popular?language=en-US&page=1`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        data.results.forEach((r: any) => { r.media_type = 'tv'; });
-        indexSeedItems(data.results, 'tv');
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn("fetchTop10 failed:", error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+          indexSeedItems(data.results, 'tv');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('tv/popular', { language: 'en-US', page: 1 });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB popular TV error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn("fetchTop10 failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchMovieTop10 = async () => {
   const cacheKey = 'movie_popular_1';
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/movie/popular?language=en-US&page=1`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        data.results.forEach((r: any) => { r.media_type = 'movie'; });
-        indexSeedItems(data.results, 'movie');
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn("fetchMovieTop10 failed:", error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+          indexSeedItems(data.results, 'movie');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('movie/popular', { language: 'en-US', page: 1 });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB popular movies error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn("fetchMovieTop10 failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchTopRatedTV = async () => {
   const cacheKey = 'tv_top_rated_1';
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/tv/top_rated?language=en-US&page=1`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        data.results.forEach((r: any) => { r.media_type = 'tv'; });
-        indexSeedItems(data.results, 'tv');
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn("fetchTopRatedTV failed:", error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+          indexSeedItems(data.results, 'tv');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('tv/top_rated', { language: 'en-US', page: 1 });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB top rated TV error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn("fetchTopRatedTV failed:", error);
+    return { results: [] };
+  }
 };
 
 export const fetchAnime = async () => {
   try {
-    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=16&origin_country=JP`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
+    const res = await tmdbProxyFetch('discover/tv', {
+      include_adult: false,
+      language: 'en-US',
+      origin_country: 'JP',
+      page: 1,
+      sort_by: 'popularity.desc',
+      with_genres: 16,
+    });
+    if (!res.ok) throw new TmdbHttpError(res.status, `TMDB discover anime error: ${res.status}`);
     return await res.json();
   } catch (error) {
     console.warn("fetchAnime failed:", error);
@@ -644,72 +774,132 @@ export const fetchAnime = async () => {
 };
 
 export const fetchAllTimeFavorites = async () => {
+  const cacheKey = 'movie_top_rated_1';
   try {
-    const res = await fetch(`${BASE_URL}/movie/top_rated?language=en-US&page=1`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
-    const data = await res.json();
-    if (data && data.results) {
-      data.results = filterOutAnime(data.results);
-      indexSeedItems(data.results, 'movie');
-    }
-    return data;
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          indexSeedItems(data.results, 'movie');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('movie/top_rated', { language: 'en-US', page: 1 });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB top rated movies error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+        }
+        return data;
+      },
+    });
   } catch (error) {
     console.warn("fetchAllTimeFavorites failed:", error);
     return { results: [] };
   }
 };
 
+function hydrateTmdbDetailsState(id: number, type: 'movie' | 'tv', data: any): void {
+  if (!data || typeof data !== 'object') return;
+  data.media_type = type;
+  const bestLogo = extractBestLogoPath(data.images?.logos || []);
+  primeLogoCache(type, id, bestLogo || data.logo_path || null);
+  if (bestLogo) {
+    data.logo_path = `${IMAGE_BASE_URL_W500}${bestLogo}`;
+  } else if (typeof data.logo_path !== 'string') {
+    data.logo_path = null;
+  }
+
+  // Pre-populate trailer cache if videos were returned
+  if (data.videos?.results) {
+    const videos = data.videos.results;
+    const officialTrailer = videos.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer' && v.official);
+    const anyTrailer = videos.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
+    const anyVideo = videos.find((v: any) => v.site === 'YouTube');
+    const trailerKey = officialTrailer?.key || anyTrailer?.key || anyVideo?.key || null;
+    trailerCache.set(`${type}_${id}`, trailerKey);
+  }
+
+  // Pre-populate season 1 cache if returned
+  if (type === 'tv' && data['season/1']) {
+    const season1Key = `tv_season_${id}_1`;
+    responseCache.set(season1Key, data['season/1']);
+    void indexedDbCache.set('tmdb', season1Key, data['season/1'], {
+      validate: isValidTmdbSeasonPayload,
+    });
+  }
+
+  setSeedItem(type, id, data);
+}
+
 export const fetchDetails = async (id: number, type: 'movie' | 'tv' = 'tv', retries = 2): Promise<any> => {
+  if (!isValidTmdbId(id)) {
+    throw new TmdbHttpError(400, `Invalid TMDB ${type} id: ${id}`, 'INVALID_ID');
+  }
+
   const cacheKey = `details_${type}_${id}`;
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
 
-  const p = (async () => {
+  const fetchDetailsNetwork = async (remainingRetries: number): Promise<any> => {
     try {
-      // For TV series, also fetch season/1 and videos in the exact same single request!
-      const append = type === 'tv'
-        ? 'images,credits,content_ratings,release_dates,videos,season/1'
-        : 'images,credits,content_ratings,release_dates,videos';
-      const res = await fetch(`${BASE_URL}/${type}/${id}?append_to_response=${append}`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
+      const append = canonicalizeAppendToResponse(
+        type === 'tv'
+          ? ['images', 'credits', 'content_ratings', 'release_dates', 'videos', 'season/1']
+          : ['images', 'credits', 'content_ratings', 'release_dates', 'videos']
+      );
+      const res = await tmdbProxyFetch(`${type}/${id}`, { append_to_response: append });
+      if (!res.ok) {
+        throw new TmdbHttpError(res.status, `TMDB details error (${type}/${id}): ${res.status}`);
+      }
       const data = await res.json();
-      if (data) {
-        data.media_type = type;
-        const bestLogo = extractBestLogoPath(data.images?.logos || []);
-        primeLogoCache(type, id, bestLogo);
-        data.logo_path = bestLogo ? `${IMAGE_BASE_URL_W500}${bestLogo}` : null;
-
-        // Pre-populate trailer cache if videos were returned
-        if (data.videos?.results) {
-          const videos = data.videos.results;
-          const officialTrailer = videos.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer' && v.official);
-          const anyTrailer = videos.find((v: any) => v.site === 'YouTube' && v.type === 'Trailer');
-          const anyVideo = videos.find((v: any) => v.site === 'YouTube');
-          const trailerKey = officialTrailer?.key || anyTrailer?.key || anyVideo?.key || null;
-          trailerCache.set(`${type}_${id}`, trailerKey);
-        }
-
-        // Pre-populate season 1 cache if returned
-        if (type === 'tv' && data['season/1']) {
-          responseCache.set(`tv_season_${id}_1`, data['season/1']);
-        }
-
-        setSeedItem(type, id, data);
+      if (data && isValidTmdbDetailsPayload(data)) {
+        hydrateTmdbDetailsState(id, type, data);
         responseCache.set(cacheKey, data);
+        void indexedDbCache.set('tmdb', cacheKey, data, {
+          validate: isValidTmdbDetailsPayload,
+        });
       }
       return data;
     } catch (error) {
-      if (retries > 0) {
-        inFlightRequests.delete(cacheKey);
+      if (remainingRetries > 0 && isTransientTmdbError(error)) {
         await new Promise(resolve => setTimeout(resolve, 200));
-        return fetchDetails(id, type, retries - 1);
+        return fetchDetailsNetwork(remainingRetries - 1);
       }
       console.warn("fetchDetails failed:", error);
       throw error;
-    } finally {
-      inFlightRequests.delete(cacheKey);
     }
-  })();
+  };
+
+  const p = (async () => {
+    try {
+      const l2Hit = await indexedDbCache.get<any>('tmdb', cacheKey, {
+        validate: isValidTmdbDetailsPayload,
+      });
+      if (l2Hit) {
+        hydrateTmdbDetailsState(id, type, l2Hit.value);
+        responseCache.set(cacheKey, l2Hit.value);
+        if (l2Hit.status === 'stale' && !backgroundRefreshRequests.has(cacheKey)) {
+          const refreshPromise = fetchDetailsNetwork(retries)
+            .then(() => undefined)
+            .catch(() => undefined)
+            .finally(() => {
+              backgroundRefreshRequests.delete(cacheKey);
+            });
+          backgroundRefreshRequests.set(cacheKey, refreshPromise);
+        }
+        return l2Hit.value;
+      }
+    } catch {
+      // Fall through to network fetch if IndexedDB fails
+    }
+
+    return fetchDetailsNetwork(retries);
+  })().finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
 
   inFlightRequests.set(cacheKey, p);
   return p;
@@ -718,13 +908,16 @@ export const fetchDetails = async (id: number, type: 'movie' | 'tv' = 'tv', retr
 const trailerCache = new Map<string, string | null>();
 
 export const fetchTrailer = async (id: number, type: 'movie' | 'tv' = 'tv'): Promise<string | null> => {
+  if (!isValidTmdbId(id)) return null;
+
   const cacheKey = `${type}_${id}`;
   if (trailerCache.has(cacheKey)) {
     return trailerCache.get(cacheKey)!;
   }
   
   try {
-    const res = await fetch(`${BASE_URL}/${type}/${id}/videos?language=en-US`, fetchOptions);
+    const res = await tmdbProxyFetch(`${type}/${id}/videos`, { language: 'en-US' });
+    if (!res.ok) return null;
     const data = await res.json();
     const videos = data.results || [];
     
@@ -747,84 +940,136 @@ export const fetchTrailer = async (id: number, type: 'movie' | 'tv' = 'tv'): Pro
 
 export const fetchByGenre = async (genreId: number) => {
   const cacheKey = `movie_genre_${genreId}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        data.results.forEach((r: any) => { r.media_type = 'movie'; });
-        indexSeedItems(data.results, 'movie');
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn(`fetchByGenre failed for genre ${genreId}:`, error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+          indexSeedItems(data.results, 'movie');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('discover/movie', {
+          include_adult: false,
+          language: 'en-US',
+          page: 1,
+          sort_by: 'popularity.desc',
+          with_genres: genreId,
+        });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB discover movie genre error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn(`fetchByGenre failed for genre ${genreId}:`, error);
+    return { results: [] };
+  }
 };
 
 export const fetchTVByGenre = async (genreId: number) => {
   const cacheKey = `tv_genre_${genreId}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=1&sort_by=popularity.desc&with_genres=${genreId}`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
-      const data = await res.json();
-      if (data && data.results) {
-        data.results = filterOutAnime(data.results);
-        data.results.forEach((r: any) => { r.media_type = 'tv'; });
-        indexSeedItems(data.results, 'tv');
-      }
-      responseCache.set(cacheKey, data);
-      return data;
-    } catch (error) {
-      console.warn(`fetchTVByGenre failed for genre ${genreId}:`, error);
-      return { results: [] };
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-  inFlightRequests.set(cacheKey, p);
-  return p;
+  try {
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+          indexSeedItems(data.results, 'tv');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('discover/tv', {
+          include_adult: false,
+          language: 'en-US',
+          page: 1,
+          sort_by: 'popularity.desc',
+          with_genres: genreId,
+        });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB discover TV genre error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+        }
+        return data;
+      },
+    });
+  } catch (error) {
+    console.warn(`fetchTVByGenre failed for genre ${genreId}:`, error);
+    return { results: [] };
+  }
 };
 
 export const fetchTVSeason = async (tvId: number, seasonNumber: number, retries = 2): Promise<any> => {
+  if (!isValidTmdbId(tvId) || !isValidTmdbSeasonNumber(seasonNumber)) {
+    throw new TmdbHttpError(400, `Invalid TMDB TV season parameters (${tvId}, ${seasonNumber})`, 'INVALID_SEASON_PARAMS');
+  }
+
   const cacheKey = `tv_season_${tvId}_${seasonNumber}`;
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
 
-  const p = (async () => {
+  const fetchSeasonNetwork = async (remainingRetries: number): Promise<any> => {
     try {
-      const res = await fetch(`${BASE_URL}/tv/${tvId}/season/${seasonNumber}?language=en-US`, fetchOptions);
-      if (!res.ok) throw new Error('Not OK');
+      const res = await tmdbProxyFetch(`tv/${tvId}/season/${seasonNumber}`, { language: 'en-US' });
+      if (!res.ok) {
+        throw new TmdbHttpError(res.status, `TMDB TV season error (${tvId}/season/${seasonNumber}): ${res.status}`);
+      }
       const data = await res.json();
-      responseCache.set(cacheKey, data);
+      if (isValidTmdbSeasonPayload(data)) {
+        responseCache.set(cacheKey, data);
+        void indexedDbCache.set('tmdb', cacheKey, data, {
+          validate: isValidTmdbSeasonPayload,
+        });
+      }
       return data;
     } catch (error) {
-      if (retries > 0) {
-        inFlightRequests.delete(cacheKey);
+      if (remainingRetries > 0 && isTransientTmdbError(error)) {
         await new Promise(resolve => setTimeout(resolve, 200));
-        return fetchTVSeason(tvId, seasonNumber, retries - 1);
+        return fetchSeasonNetwork(remainingRetries - 1);
       }
       console.warn(`fetchTVSeason failed for tv ${tvId} season ${seasonNumber}:`, error);
       throw error;
-    } finally {
-      inFlightRequests.delete(cacheKey);
     }
-  })();
+  };
+
+  const p = (async () => {
+    try {
+      const l2Hit = await indexedDbCache.get<any>('tmdb', cacheKey, {
+        validate: isValidTmdbSeasonPayload,
+      });
+      if (l2Hit) {
+        responseCache.set(cacheKey, l2Hit.value);
+        if (l2Hit.status === 'stale' && !backgroundRefreshRequests.has(cacheKey)) {
+          const refreshPromise = fetchSeasonNetwork(retries)
+            .then(() => undefined)
+            .catch(() => undefined)
+            .finally(() => {
+              backgroundRefreshRequests.delete(cacheKey);
+            });
+          backgroundRefreshRequests.set(cacheKey, refreshPromise);
+        }
+        return l2Hit.value;
+      }
+    } catch {
+      // Fall through to network fetch if IndexedDB fails
+    }
+
+    return fetchSeasonNetwork(retries);
+  })().finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
+
   inFlightRequests.set(cacheKey, p);
   return p;
 };
@@ -832,11 +1077,24 @@ export const fetchTVSeason = async (tvId: number, seasonNumber: number, retries 
 let cachedProviders: any[] = [];
 export const fetchProviderLogos = async () => {
   if (cachedProviders.length > 0) return cachedProviders;
+  const cacheKey = 'watch_providers_movie_en';
   try {
-    const res = await fetch(`${BASE_URL}/watch/providers/movie?language=en-US`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
-    const data = await res.json();
-    cachedProviders = data.results || [];
+    const providers = await fetchWithTmdbL2Cache<any[]>({
+      cacheKey,
+      validate: (val): val is any[] => Array.isArray(val) && val.length > 0,
+      onHydrate: (val) => {
+        if (Array.isArray(val) && val.length > 0) {
+          cachedProviders = val;
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('watch/providers/movie', { language: 'en-US' });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB watch providers error: ${res.status}`);
+        const data = await res.json();
+        return Array.isArray(data?.results) ? data.results : [];
+      },
+    });
+    cachedProviders = providers;
     return cachedProviders;
   } catch (error) {
     console.warn("fetchProviderLogos failed:", error);
@@ -846,18 +1104,35 @@ export const fetchProviderLogos = async () => {
 
 export const fetchByProvider = async (providerId: number, page: number = 1) => {
   const cacheKey = `provider_movie_${providerId}_p${page}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   try {
-    const res = await fetch(`${BASE_URL}/discover/movie?include_adult=false&language=en-US&page=${page}&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
-    const data = await res.json();
-    if (data && data.results) {
-      data.results = filterOutAnime(data.results);
-      data.results.forEach((r: any) => { r.media_type = 'movie'; });
-      indexSeedItems(data.results, 'movie');
-    }
-    responseCache.set(cacheKey, data);
-    return data;
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+          indexSeedItems(data.results, 'movie');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('discover/movie', {
+          include_adult: false,
+          language: 'en-US',
+          page,
+          sort_by: 'popularity.desc',
+          watch_region: 'US',
+          with_watch_providers: providerId,
+        });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB provider movies error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'movie'; });
+        }
+        return data;
+      },
+    });
   } catch (error) {
     console.warn(`fetchByProvider failed for provider ${providerId}:`, error);
     return { results: [] };
@@ -866,18 +1141,35 @@ export const fetchByProvider = async (providerId: number, page: number = 1) => {
 
 export const fetchTVByProvider = async (providerId: number, page: number = 1) => {
   const cacheKey = `provider_tv_${providerId}_p${page}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   try {
-    const res = await fetch(`${BASE_URL}/discover/tv?include_adult=false&language=en-US&page=${page}&sort_by=popularity.desc&watch_region=US&with_watch_providers=${providerId}`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
-    const data = await res.json();
-    if (data && data.results) {
-      data.results = filterOutAnime(data.results);
-      data.results.forEach((r: any) => { r.media_type = 'tv'; });
-      indexSeedItems(data.results, 'tv');
-    }
-    responseCache.set(cacheKey, data);
-    return data;
+    return await fetchWithTmdbL2Cache({
+      cacheKey,
+      validate: isValidTmdbListPayload,
+      onHydrate: (data) => {
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+          indexSeedItems(data.results, 'tv');
+        }
+      },
+      fetcher: async () => {
+        const res = await tmdbProxyFetch('discover/tv', {
+          include_adult: false,
+          language: 'en-US',
+          page,
+          sort_by: 'popularity.desc',
+          watch_region: 'US',
+          with_watch_providers: providerId,
+        });
+        if (!res.ok) throw new TmdbHttpError(res.status, `TMDB provider TV error: ${res.status}`);
+        const data = await res.json();
+        if (data && Array.isArray(data.results)) {
+          data.results = filterOutAnime(data.results);
+          data.results.forEach((r: any) => { r.media_type = 'tv'; });
+        }
+        return data;
+      },
+    });
   } catch (error) {
     console.warn(`fetchTVByProvider failed for provider ${providerId}:`, error);
     return { results: [] };
@@ -885,9 +1177,17 @@ export const fetchTVByProvider = async (providerId: number, page: number = 1) =>
 };
 
 export const searchMovies = async (query: string) => {
+  const cleanQuery = sanitizeTmdbSearchQuery(query);
+  if (!cleanQuery) return { results: [] };
+
   try {
-    const res = await fetch(`${BASE_URL}/search/movie?query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
+    const res = await tmdbProxyFetch('search/movie', {
+      include_adult: false,
+      language: 'en-US',
+      page: 1,
+      query: cleanQuery,
+    });
+    if (!res.ok) throw new TmdbHttpError(res.status, `TMDB search movie error: ${res.status}`);
     const data = await res.json();
     if (data && data.results) {
       data.results = filterOutAnime(data.results);
@@ -902,9 +1202,17 @@ export const searchMovies = async (query: string) => {
 };
 
 export const searchTV = async (query: string) => {
+  const cleanQuery = sanitizeTmdbSearchQuery(query);
+  if (!cleanQuery) return { results: [] };
+
   try {
-    const res = await fetch(`${BASE_URL}/search/tv?query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`, fetchOptions);
-    if (!res.ok) throw new Error('Not OK');
+    const res = await tmdbProxyFetch('search/tv', {
+      include_adult: false,
+      language: 'en-US',
+      page: 1,
+      query: cleanQuery,
+    });
+    if (!res.ok) throw new TmdbHttpError(res.status, `TMDB search TV error: ${res.status}`);
     const data = await res.json();
     if (data && data.results) {
       data.results = filterOutAnime(data.results);
@@ -995,24 +1303,33 @@ export const fetchTrendingPeople = async (
   page: number = 1
 ): Promise<{ results: TrendingActorSummary[]; page: number; total_pages: number }> => {
   const cacheKey = `trending_person_${timeWindow}_p${page}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
+  const isValidTrendingPeople = (
+    val: unknown
+  ): val is { results: TrendingActorSummary[]; page: number; total_pages: number } =>
+    Boolean(val && typeof val === 'object' && Array.isArray((val as any).results));
 
-  const sessionCached = readSessionCache<{ results: TrendingActorSummary[]; page: number; total_pages: number }>(cacheKey);
-  if (sessionCached) {
-    responseCache.set(cacheKey, sessionCached);
-    return sessionCached;
-  }
-
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
-
-  const p = (async () => {
-    try {
-      const res = await fetch(
-        `${BASE_URL}/trending/person/${timeWindow}?language=en-US&page=${page}`,
-        fetchOptions
-      );
+  return fetchWithTmdbL2Cache({
+    cacheKey,
+    validate: isValidTrendingPeople,
+    readSyncFallback: () =>
+      readSessionCache<{ results: TrendingActorSummary[]; page: number; total_pages: number }>(cacheKey),
+    writeSyncFallback: (val) => writeSessionCache(cacheKey, val),
+    onHydrate: (data) => {
+      if (data && Array.isArray(data.results)) {
+        for (const person of data.results) {
+          if (person && Array.isArray(person.known_for)) {
+            indexSeedItems(person.known_for);
+          }
+        }
+      }
+    },
+    fetcher: async () => {
+      const res = await tmdbProxyFetch(`trending/person/${timeWindow}`, {
+        language: 'en-US',
+        page,
+      });
       if (!res.ok) {
-        throw new Error(`TMDB trending person error: ${res.status}`);
+        throw new TmdbHttpError(res.status, `TMDB trending person error: ${res.status}`);
       }
       const data = await res.json();
       const rawResults: any[] = Array.isArray(data?.results) ? data.results : [];
@@ -1045,178 +1362,160 @@ export const fetchTrendingPeople = async (
       // Preserve TMDB's popularity ordering
       filtered.sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
 
-      const normalized = {
+      return {
         results: filtered,
         page: typeof data?.page === 'number' ? data.page : page,
         total_pages: typeof data?.total_pages === 'number' ? data.total_pages : 1,
       };
-
-      responseCache.set(cacheKey, normalized);
-      writeSessionCache(cacheKey, normalized);
-      return normalized;
-    } finally {
-      inFlightRequests.delete(cacheKey);
-    }
-  })();
-
-  inFlightRequests.set(cacheKey, p);
-  return p;
+    },
+  });
 };
 
 export const fetchPersonDetails = async (personId: number): Promise<ActorDetails> => {
-  const cacheKey = `person_details_${personId}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-
-  const sessionCached = readSessionCache<ActorDetails>(cacheKey);
-  if (sessionCached) {
-    responseCache.set(cacheKey, sessionCached);
-    return sessionCached;
+  if (!isValidTmdbId(personId)) {
+    throw new TmdbHttpError(400, `Invalid TMDB person id: ${personId}`, 'INVALID_ID');
   }
 
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+  const cacheKey = `person_details_${personId}`;
+  const isValidActorDetails = (val: unknown): val is ActorDetails =>
+    Boolean(val && typeof val === 'object' && typeof (val as ActorDetails).id === 'number');
 
-  const p = personApiQueue.enqueue(async () => {
-    const res = await fetch(`${BASE_URL}/person/${personId}?language=en-US`, fetchOptions);
-    if (!res.ok) {
-      throw new Error(`TMDB person details error (${personId}): ${res.status}`);
-    }
-    const data = await res.json();
-    const details: ActorDetails = {
-      id: data.id,
-      name: data.name || 'Unknown Actor',
-      biography: typeof data.biography === 'string' ? data.biography.trim() : '',
-      profile_path: data.profile_path || null,
-      known_for_department: data.known_for_department || 'Acting',
-      popularity: typeof data.popularity === 'number' ? data.popularity : 0,
-      birthday: data.birthday || null,
-      deathday: data.deathday || null,
-      place_of_birth: data.place_of_birth || null,
-      also_known_as: Array.isArray(data.also_known_as) ? data.also_known_as : [],
-    };
-    responseCache.set(cacheKey, details);
-    writeSessionCache(cacheKey, details);
-    return details;
+  return fetchWithTmdbL2Cache({
+    cacheKey,
+    validate: isValidActorDetails,
+    readSyncFallback: () => readSessionCache<ActorDetails>(cacheKey),
+    writeSyncFallback: (val) => writeSessionCache(cacheKey, val),
+    fetcher: () =>
+      personApiQueue.enqueue(async () => {
+        const res = await tmdbProxyFetch(`person/${personId}`, { language: 'en-US' });
+        if (!res.ok) {
+          throw new TmdbHttpError(res.status, `TMDB person details error (${personId}): ${res.status}`);
+        }
+        const data = await res.json();
+        const details: ActorDetails = {
+          id: data.id,
+          name: data.name || 'Unknown Actor',
+          biography: typeof data.biography === 'string' ? data.biography.trim() : '',
+          profile_path: data.profile_path || null,
+          known_for_department: data.known_for_department || 'Acting',
+          popularity: typeof data.popularity === 'number' ? data.popularity : 0,
+          birthday: data.birthday || null,
+          deathday: data.deathday || null,
+          place_of_birth: data.place_of_birth || null,
+          also_known_as: Array.isArray(data.also_known_as) ? data.also_known_as : [],
+        };
+        return details;
+      }),
   });
-
-  const tracked = p.finally(() => {
-    inFlightRequests.delete(cacheKey);
-  });
-  inFlightRequests.set(cacheKey, tracked);
-  return tracked;
 };
 
 export const fetchPersonCombinedCredits = async (personId: number): Promise<ActorCreditItem[]> => {
-  const cacheKey = `person_combined_credits_${personId}`;
-  if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
-
-  const sessionCached = readSessionCache<ActorCreditItem[]>(cacheKey);
-  if (sessionCached) {
-    responseCache.set(cacheKey, sessionCached);
-    indexSeedItems(sessionCached);
-    return sessionCached;
+  if (!isValidTmdbId(personId)) {
+    throw new TmdbHttpError(400, `Invalid TMDB person id: ${personId}`, 'INVALID_ID');
   }
 
-  if (inFlightRequests.has(cacheKey)) return inFlightRequests.get(cacheKey)!;
+  const cacheKey = `person_combined_credits_${personId}`;
+  const isValidCreditsList = (val: unknown): val is ActorCreditItem[] => Array.isArray(val);
 
-  const p = personApiQueue.enqueue(async () => {
-    const res = await fetch(
-      `${BASE_URL}/person/${personId}/combined_credits?language=en-US`,
-      fetchOptions
-    );
-    if (!res.ok) {
-      throw new Error(`TMDB combined credits error (${personId}): ${res.status}`);
-    }
-    const data = await res.json();
-    const rawCast: any[] = Array.isArray(data?.cast) ? data.cast : [];
-
-    const dedupedMap = new Map<string, ActorCreditItem>();
-
-    for (const entry of rawCast) {
-      if (!entry || typeof entry.id !== 'number') continue;
-      const mediaType: 'movie' | 'tv' | null =
-        entry.media_type === 'movie'
-          ? 'movie'
-          : entry.media_type === 'tv'
-          ? 'tv'
-          : entry.first_air_date
-          ? 'tv'
-          : entry.release_date
-          ? 'movie'
-          : null;
-      if (!mediaType) continue;
-
-      if (typeof entry.poster_path !== 'string' || entry.poster_path.trim().length === 0) {
-        continue;
+  return fetchWithTmdbL2Cache({
+    cacheKey,
+    validate: isValidCreditsList,
+    readSyncFallback: () => readSessionCache<ActorCreditItem[]>(cacheKey),
+    writeSyncFallback: (val) => writeSessionCache(cacheKey, val),
+    onHydrate: (credits) => {
+      if (Array.isArray(credits)) {
+        indexSeedItems(credits);
       }
-
-      const key = `${mediaType}_${entry.id}`;
-      const rawDate = entry.release_date || entry.first_air_date || '';
-      const parsedYear = rawDate ? parseInt(String(rawDate).slice(0, 4), 10) : null;
-      const releaseYear = parsedYear && !Number.isNaN(parsedYear) ? parsedYear : null;
-      const cleanChar = typeof entry.character === 'string' ? entry.character.trim() : '';
-
-      const existing = dedupedMap.get(key);
-      if (existing) {
-        if (
-          cleanChar &&
-          !existing.character.toLowerCase().includes(cleanChar.toLowerCase())
-        ) {
-          existing.character = existing.character
-            ? `${existing.character} / ${cleanChar}`
-            : cleanChar;
+    },
+    fetcher: () =>
+      personApiQueue.enqueue(async () => {
+        const res = await tmdbProxyFetch(`person/${personId}/combined_credits`, { language: 'en-US' });
+        if (!res.ok) {
+          throw new TmdbHttpError(res.status, `TMDB combined credits error (${personId}): ${res.status}`);
         }
-        if ((entry.popularity || 0) > existing.popularity) {
-          existing.popularity = entry.popularity;
+        const data = await res.json();
+        const rawCast: any[] = Array.isArray(data?.cast) ? data.cast : [];
+
+        const dedupedMap = new Map<string, ActorCreditItem>();
+
+        for (const entry of rawCast) {
+          if (!entry || typeof entry.id !== 'number') continue;
+          const mediaType: 'movie' | 'tv' | null =
+            entry.media_type === 'movie'
+              ? 'movie'
+              : entry.media_type === 'tv'
+              ? 'tv'
+              : entry.first_air_date
+              ? 'tv'
+              : entry.release_date
+              ? 'movie'
+              : null;
+          if (!mediaType) continue;
+
+          if (typeof entry.poster_path !== 'string' || entry.poster_path.trim().length === 0) {
+            continue;
+          }
+
+          const key = `${mediaType}_${entry.id}`;
+          const rawDate = entry.release_date || entry.first_air_date || '';
+          const parsedYear = rawDate ? parseInt(String(rawDate).slice(0, 4), 10) : null;
+          const releaseYear = parsedYear && !Number.isNaN(parsedYear) ? parsedYear : null;
+          const cleanChar = typeof entry.character === 'string' ? entry.character.trim() : '';
+
+          const existing = dedupedMap.get(key);
+          if (existing) {
+            if (
+              cleanChar &&
+              !existing.character.toLowerCase().includes(cleanChar.toLowerCase())
+            ) {
+              existing.character = existing.character
+                ? `${existing.character} / ${cleanChar}`
+                : cleanChar;
+            }
+            if ((entry.popularity || 0) > existing.popularity) {
+              existing.popularity = entry.popularity;
+            }
+            continue;
+          }
+
+          const itemTitle = entry.title || entry.name || entry.original_title || entry.original_name || 'Untitled';
+          const creditItem: ActorCreditItem = {
+            id: entry.id,
+            media_type: mediaType,
+            title: itemTitle,
+            name: entry.name || itemTitle,
+            original_title: entry.original_title,
+            original_name: entry.original_name,
+            poster_path: entry.poster_path,
+            backdrop_path: entry.backdrop_path || null,
+            character: cleanChar,
+            popularity: typeof entry.popularity === 'number' ? entry.popularity : 0,
+            vote_average: typeof entry.vote_average === 'number' ? entry.vote_average : 0,
+            vote_count: typeof entry.vote_count === 'number' ? entry.vote_count : 0,
+            release_date: entry.release_date,
+            first_air_date: entry.first_air_date,
+            release_year: releaseYear,
+            episode_count: typeof entry.episode_count === 'number' ? entry.episode_count : undefined,
+            genre_ids: Array.isArray(entry.genre_ids) ? entry.genre_ids : [],
+            overview: entry.overview || '',
+            credit_order: typeof entry.order === 'number' ? entry.order : 999,
+          };
+
+          dedupedMap.set(key, creditItem);
         }
-        continue;
-      }
 
-      const itemTitle = entry.title || entry.name || entry.original_title || entry.original_name || 'Untitled';
-      const creditItem: ActorCreditItem = {
-        id: entry.id,
-        media_type: mediaType,
-        title: itemTitle,
-        name: entry.name || itemTitle,
-        original_title: entry.original_title,
-        original_name: entry.original_name,
-        poster_path: entry.poster_path,
-        backdrop_path: entry.backdrop_path || null,
-        character: cleanChar,
-        popularity: typeof entry.popularity === 'number' ? entry.popularity : 0,
-        vote_average: typeof entry.vote_average === 'number' ? entry.vote_average : 0,
-        vote_count: typeof entry.vote_count === 'number' ? entry.vote_count : 0,
-        release_date: entry.release_date,
-        first_air_date: entry.first_air_date,
-        release_year: releaseYear,
-        episode_count: typeof entry.episode_count === 'number' ? entry.episode_count : undefined,
-        genre_ids: Array.isArray(entry.genre_ids) ? entry.genre_ids : [],
-        overview: entry.overview || '',
-        credit_order: typeof entry.order === 'number' ? entry.order : 999,
-      };
+        const credits = Array.from(dedupedMap.values());
 
-      dedupedMap.set(key, creditItem);
-    }
+        // Sort sensibly: prioritize weighted popularity + vote count so major film/TV roles appear first
+        credits.sort((a, b) => {
+          const scoreA = (a.popularity || 0) + Math.min(a.vote_count || 0, 5000) * 0.015;
+          const scoreB = (b.popularity || 0) + Math.min(b.vote_count || 0, 5000) * 0.015;
+          return scoreB - scoreA;
+        });
 
-    const credits = Array.from(dedupedMap.values());
-
-    // Sort sensibly: prioritize weighted popularity + vote count so major film/TV roles appear first
-    credits.sort((a, b) => {
-      const scoreA = (a.popularity || 0) + Math.min(a.vote_count || 0, 5000) * 0.015;
-      const scoreB = (b.popularity || 0) + Math.min(b.vote_count || 0, 5000) * 0.015;
-      return scoreB - scoreA;
-    });
-
-    indexSeedItems(credits);
-    responseCache.set(cacheKey, credits);
-    writeSessionCache(cacheKey, credits);
-    return credits;
+        return credits;
+      }),
   });
-
-  const tracked = p.finally(() => {
-    inFlightRequests.delete(cacheKey);
-  });
-  inFlightRequests.set(cacheKey, tracked);
-  return tracked;
 };
 
 export const getCachedPersonDetails = (personId: number): ActorDetails | null => {
@@ -1230,4 +1529,19 @@ export const getCachedPersonCombinedCredits = (personId: number): ActorCreditIte
   if (responseCache.has(cacheKey)) return responseCache.get(cacheKey);
   return readSessionCache<ActorCreditItem[]>(cacheKey);
 };
+
+/** Clears the in-memory TMDB response, logo, trailer, provider, and seed caches (primarily for unit tests). */
+export function resetTmdbClientCache(): void {
+  memoryLogoCache.clear();
+  inFlightLogos.clear();
+  backgroundRefreshLogos.clear();
+  responseCache.clear();
+  inFlightRequests.clear();
+  backgroundRefreshRequests.clear();
+  seedItemStore.clear();
+  preloadedImageUrls.clear();
+  trailerCache.clear();
+  cachedProviders = [];
+}
+
 

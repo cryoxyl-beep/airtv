@@ -153,7 +153,12 @@ export default function PlayerPage({ type: propType }: { type?: 'movie' | 'tv' |
           details = await fetchAnimeDetails(parseInt(id));
           if (details) {
             const numEpisodes = details.number_of_episodes || 12;
-            const mergedEpisodes = await buildAnimeEpisodeList(parseInt(id), numEpisodes);
+            const mergedEpisodes = await buildAnimeEpisodeList(
+              parseInt(id),
+              numEpisodes,
+              details.anilist_raw?.streamingEpisodes,
+              details.backdrop_path
+            );
             details.animeGroup = { seasons: extractAnimeSeasons(details.anilist_raw) };
             setSeasonData({ episodes: mergedEpisodes });
           }
